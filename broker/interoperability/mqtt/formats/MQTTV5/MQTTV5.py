@@ -47,12 +47,12 @@ MAX_PACKETID = 2**16-1
 
 class PacketTypes:
 
-  indexes = range(1, 16)
+  indexes = range(1, 17)
 
   # Packet types
   CONNECT, CONNACK, PUBLISH, PUBACK, PUBREC, PUBREL, \
   PUBCOMP, SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, \
-  PINGREQ, PINGRESP, DISCONNECT, AUTH = indexes
+  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ = indexes
 
   # Dummy packet type for properties use - will delay only applies to will
   WILLMESSAGE = 99
@@ -63,7 +63,7 @@ class Packets(object):
   Names = [ "reserved", \
     "Connect", "Connack", "Publish", "Puback", "Pubrec", "Pubrel", \
     "Pubcomp", "Subscribe", "Suback", "Unsubscribe", "Unsuback", \
-    "Pingreq", "Pingresp", "Disconnect", "Auth"]
+    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq"]
 
   classNames = [name+'es' if name == "Publish" else
                 name+'s' if name != "reserved" else name for name in Names]
@@ -91,6 +91,8 @@ def PacketType(byte):
   print("san----- Extracting the fixed header to detetct the packetType")
   if byte != None:
     rc = byte[0] >> 4
+    if (rc & 0x01 == 1) and (byte[0] & 0x0F != 0) :
+      rc = byte[0] - 1
     
   else:
     rc = None    
@@ -354,7 +356,9 @@ class FixedHeaders(object):
     buffer = bytes([(self.PacketType << 4) | (self.DUP << 3) |\
                          (self.QoS << 1) | self.RETAIN])
     self.remainingLength = length
+    print("nethmi 1 : ", buffer)
     buffer += VBIs.encode(length)
+    print("nethmi 2 : ", buffer)
     return buffer
 #===============sangeeth========================
   def unpack(self, buffer, maximumPacketSize):
@@ -367,9 +371,11 @@ class FixedHeaders(object):
     #self.RETAIN = (b0 & 0x01) == 1
     
     "San - Extract ntp reqsuest flag only from CONNECT"
-    if(self.PacketType & 0x01 == 1):
+    if (self.PacketType & 0x01 == 1) :
       self.ntpReq = (b0 & 0x01) == 1
       self.ntpRep = ((b0 >> 1) & 0x01) == 1
+      if b0 & 0x0F != 0 :
+        self.PacketType = b0 - 1
     
     else:  #"San - Extract Dup,QoS,retain only from publish"  
       self.DUP = ((b0 >> 3) & 0x01) == 1
@@ -1659,9 +1665,229 @@ class Auths(Packets):
            self.properties == packet.properties
 
 
+"introducing ntp request - sangeeth"
+class NTPReqs(Packets):
+
+  def __init__(self, buffer = None):
+    object.__setattr__(self, "names",
+         ["fh", "properties", "WillProperties", "ProtocolName", "ProtocolVersion",
+          "ClientIdentifier", "CleanStart", "KeepAliveTimer",
+          "WillFlag", "WillQoS", "WillRETAIN", "WillTopic", "WillMessage",
+          "usernameFlag", "passwordFlag", "username", "password"])
+
+    print("san - NTPReqs class init function")#sangeeth
+    self.fh = FixedHeaders(PacketTypes.NTPREQ)
+
+    # variable header
+    self.ProtocolName = "MQTT"
+    self.ProtocolVersion = 5
+    self.CleanStart = True
+    self.WillFlag = False
+    self.WillQoS = 0
+    self.WillRETAIN = 0
+    self.KeepAliveTimer = 30
+    self.usernameFlag = False
+    self.passwordFlag = False
+
+    self.properties = Properties(PacketTypes.NTPREQ)
+    self.WillProperties = Properties(PacketTypes.WILLMESSAGE)
+
+    # Payload
+    self.ClientIdentifier = ""   # UTF-8
+    self.WillTopic = None        # UTF-8
+    self.WillMessage = None      # binary
+    self.username = None         # UTF-8
+    self.password = None         # binary
+
+    if buffer != None:
+      self.unpack(buffer)
+
+  def pack(self):
+    connectFlags = bytes([(self.CleanStart << 1) | (self.WillFlag << 2) | \
+                       (self.WillQoS << 3) | (self.WillRETAIN << 5) | \
+                       (self.usernameFlag << 6) | (self.passwordFlag << 7)])
+    buffer = writeUTF(self.ProtocolName) + bytes([self.ProtocolVersion]) + \
+              connectFlags + writeInt16(self.KeepAliveTimer)
+    buffer += self.properties.pack()
+    buffer += writeUTF(self.ClientIdentifier)
+    if self.WillFlag:
+      assert self.WillProperties.packetType == PacketTypes.WILLMESSAGE
+      buffer += self.WillProperties.pack()
+      buffer += writeUTF(self.WillTopic)
+      buffer += writeBytes(self.WillMessage)
+    if self.usernameFlag:
+      buffer += writeUTF(self.username)
+    if self.passwordFlag:
+      buffer += writeBytes(self.password)
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+#================sangeeth=======================
+  def unpack(self, buffer, maximumPacketSize):
+    print("san - inside unpack in MQTTV5 in NTPReqs class")  
+    assert len(buffer) >= 2
+    assert PacketType(buffer) == PacketTypes.NTPREQ
+    print("san - len(buffer) : ",len(buffer))
+
+    try:
+      fhlen = self.fh.unpack(buffer, maximumPacketSize)#unpack in line 353
+      packlen = fhlen + self.fh.remainingLength
+      print("san - fhlan and packlen : ", fhlen, packlen)
+      assert len(buffer) >= packlen, "buffer length %d packet length %d" % (len(buffer), packlen)
+      curlen = fhlen # points to after header + remaining length
+      assert self.fh.DUP == False, "[MQTT5-2.1.3-1]"
+      assert self.fh.QoS == 0, "[MQTT5-2.1.3-1] QoS was not 0, was %d" % self.fh.QoS
+      assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1]"
+
+      # to allow the server to send back a CONNACK with unsupported protocol version,
+      # the following two assertions will need to be disabled
+      self.ProtocolName, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+      curlen += valuelen
+      print("valuelen ", valuelen)
+      assert self.ProtocolName == "MQTT", "[MQTT5-3.1.2-1-error] Wrong protocol name %s" % self.ProtocolName
+      logger.info("[MQTT5-3.1.2-1] Protocol name must be MQTT")
+
+      self.ProtocolVersion = buffer[curlen]
+      curlen += 1 #curlen = 9 , control header byte 8
+      assert self.ProtocolVersion == 5, "[MQTT5-3.1.2-2-error] Wrong protocol version %s" % self.ProtocolVersion
+      logger.info("[MQTT5-3.1.2-2] Protocol name must be 5")
+
+      connectFlags = buffer[curlen] #curlen = 9 , control header byte 8
+      assert (connectFlags & 0x01) == 0, "[MQTT5-3.1.2-3] reserved connect flag must be 0"
+      self.CleanStart = ((connectFlags >> 1) & 0x01) == 1
+      self.WillFlag = ((connectFlags >> 2) & 0x01) == 1
+      self.WillQoS = (connectFlags >> 3) & 0x03
+      self.WillRETAIN = (connectFlags >> 5) & 0x01
+      self.passwordFlag = ((connectFlags >> 6) & 0x01) == 1
+      self.usernameFlag = ((connectFlags >> 7) & 0x01) == 1
+      curlen += 1 #curlen = 10 
+
+      if self.WillFlag:
+        assert self.WillQoS in [0, 1, 2], "[MQTT5-3.1.2-12] will qos must not be 3"
+      else:
+        assert self.WillQoS == 0, "[MQTT5-3.1.2-11] will qos must be 0, if will flag is false"
+        assert self.WillRETAIN == False, "[MQTT5-3.1.2-13] will retain must be false, if will flag is false"
+
+      self.KeepAliveTimer = readInt16(buffer[curlen:]) #curlen = 10, control header byte 9
+      curlen += 2 #curlen = 12
+      print("12 curlen : ",curlen)
+
+      curlen += self.properties.unpack(buffer[curlen:])[1]
+      print("curlen - self.properties.unpack(buffer[curlen:])[1] : ", curlen)
+      logger.info("[MQTT5-3.1.3-3] Clientid must be present, and first field")
+      logger.info("[MQTT5-3.1.3-4] Clientid must be a UTF-8 encoded string")
+      self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+      curlen += valuelen
+      print("curlen client identifier : ",curlen)
+      #sangeeth, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+      #print(valuelen,"  ",sangeeth)
+      #curlen += valuelen
+      #print("curlen remaining data: ",curlen)
+
+      if self.WillFlag:
+        curlen += self.WillProperties.unpack(buffer[curlen:])[1]
+        self.WillTopic, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+        logger.info("[MQTT5-3.1.3-11] will topic must be a UTF-8 encoded string")
+        curlen += valuelen
+        self.WillMessage, valuelen = readBytes(buffer[curlen:])
+        curlen += valuelen
+        logger.info("[MQTT5-3.1.2-9] will topic and will message fields must be present")
+      else:
+        self.WillTopic = self.WillMessage = None
+
+      if self.usernameFlag:
+        assert len(buffer) > curlen+2, "Buffer too short to read username length"
+        self.username, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+        curlen += valuelen
+        logger.info("[MQTT5-3.1.2-17] username must be in payload if user name flag is 1")
+        logger.info("[MQTT5-3.1.3-12] username must be next and UTF-8 encoded string")
+      else:
+        logger.info("[MQTT5-3.1.2-16] username must not be in payload if user name flag is 0")
+        assert self.passwordFlag == False, "[MQTT5-3.1.2-22] password flag must be 0 if username flag is 0"
+
+      if self.passwordFlag:
+        assert len(buffer) > curlen+2, "Buffer too short to read password length"
+        self.password, valuelen = readBytes(buffer[curlen:])
+        curlen += valuelen
+        logger.info("[MQTT5-3.1.2-19] password must be in payload if password flag is 1")
+      else:
+        logger.info("[MQTT5-3.1.2-18] password must not be in payload if password flag is 0")
+
+      if self.WillFlag and self.usernameFlag and self.passwordFlag:
+        logger.info("[MQTT5-3.1.3-1] clientid, will topic, will message, username and password all present")
+
+      print("curlen ",curlen)
+      print("packlen ",packlen)
+      assert curlen == packlen, "Packet is wrong length curlen %d != packlen %d" % (curlen, packlen)
+    except:
+      traceback.print_exc()
+      logger.exception("[MQTT5-3.1.4-1] server must validate connect packet and close connection without connack if it does not conform")
+      raise
+
+  def __str__(self):
+    buf = str(self.fh)+", ProtocolName="+str(self.ProtocolName)+", ProtocolVersion=" +\
+          str(self.ProtocolVersion)+", CleanStart="+str(self.CleanStart) +\
+          ", WillFlag="+str(self.WillFlag)+", KeepAliveTimer=" +\
+          str(self.KeepAliveTimer)+", ClientId="+str(self.ClientIdentifier) +\
+          ", usernameFlag="+str(self.usernameFlag)+", passwordFlag="+str(self.passwordFlag)
+    if self.WillFlag:
+      buf += ", WillQoS=" + str(self.WillQoS) +\
+             ", WillRETAIN=" + str(self.WillRETAIN) +\
+             ", WillTopic='"+ self.WillTopic +\
+             ", WillProperties='"+ str(self.WillProperties) +\
+             "', WillMessage='"+str(self.WillMessage)+"'"
+    if self.username:
+      buf += ", username="+self.username
+    if self.password:
+      buf += ", password="+str(self.password)
+    buf += ", properties="+str(self.properties)
+    return buf+")"
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "ProtocolName": self.ProtocolName,
+      "ProtocolVersion": self.ProtocolVersion,
+      "CleanStart": self.CleanStart,
+      "WillFlag": self.WillFlag, 
+      "KeepAliveTimer": self.KeepAliveTimer,
+      "ClientId": self.ClientIdentifier,
+      "usernameFlag": self.usernameFlag,
+      "passwordFlag": self.passwordFlag}
+    if self.WillFlag:
+      data["WillQoS"] = self.WillQoS
+      data["WillRETAIN"] = self.WillRETAIN
+      data["WillTopic"] = self.WillTopic
+      data["WillProperties"] = self.WillProperties.json()
+      data["WillMessage"] = str(self.WillMessage)
+    if self.username:
+      data["username"] = self.username
+    if self.password:
+      data["password"] = self.password
+    data["Properties"] = self.properties.json()
+    return data
+
+  def __eq__(self, packet):
+    rc = Packets.__eq__(self, packet) and \
+           self.ProtocolName == packet.ProtocolName and \
+           self.ProtocolVersion == packet.ProtocolVersion and \
+           self.CleanStart == packet.CleanStart and \
+           self.WillFlag == packet.WillFlag and \
+           self.KeepAliveTimer == packet.KeepAliveTimer and \
+           self.ClientIdentifier == packet.ClientIdentifier and \
+           self.WillFlag == packet.WillFlag
+    if rc and self.WillFlag:
+      rc = self.WillQoS == packet.WillQoS and \
+           self.WillRETAIN == packet.WillRETAIN and \
+           self.WillTopic == packet.WillTopic and \
+           self.WillMessage == packet.WillMessage
+    if rc:
+      rc = self.properties == packet.properties
+    return rc
+
+
 classes = [Connects, Connacks, Publishes, Pubacks, Pubrecs,
            Pubrels, Pubcomps, Subscribes, Subacks, Unsubscribes,
-           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths]
+           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs]
 #==============sangeeth============================
 def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
   print("san-inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")
