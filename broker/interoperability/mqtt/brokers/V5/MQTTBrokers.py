@@ -332,6 +332,7 @@ class MQTTBrokers:
 #=================sangeeth===========================
   def handleRequest(self, sock):
     print("san-inside handle request in brokers/v5/MQTTBrokers.py")
+    print("san- initial sock: ",sock)
     "this is going to be called from multiple threads, so synchronize"
     self.lock.acquire()
     raw_packet = None
@@ -351,7 +352,7 @@ class MQTTBrokers:
         try:
           print("san-Before unpackPacket")  
           packet = MQTTV5.unpackPacket(raw_packet, self.options["maximumPacketSize"])
-          print("san-After unpackPacket")
+          print("san-After unpackPacket : ", packet)
           if self.options["visual"]:
             clientid = self.clients[sock].id if sock in self.clients.keys() else ""
             if clientid == "" and hasattr(packet, "ClientIdentifier"):
@@ -398,7 +399,8 @@ class MQTTBrokers:
     if self.mscfile != None:
       print("**********san - 2nd if inside handlePacket in MQTTBrokers.py*********")   
       self.mscfile.write("client%d=>broker[label=%s];\n" % (sock.fileno(), str(packet).split("(")[0]))
-    if sock not in self.clients.keys() and packet.fh.PacketType != MQTTV5.PacketTypes.CONNECT:
+#    if sock not in self.clients.keys() and packet.fh.PacketType != MQTTV5.PacketTypes.CONNECT:
+    if sock not in self.clients.keys() and (packet.fh.PacketType != MQTTV5.PacketTypes.CONNECT and packet.fh.PacketType != MQTTV5.PacketTypes.NTPREQ):  
       print("**********san - 3rd if inside handlePacket in MQTTBrokers.py*********")   
       self.disconnect(sock, packet)
       raise MQTTV5.MQTTException("[MQTT5-3.1.0-1-error] Connect was not first packet on socket")
@@ -419,10 +421,9 @@ class MQTTBrokers:
     print("san - inside connect function in MQTTBrokers.py") 
     temp1=1 #sangeeth
     temp2=0 #sangeeth
-    if(temp1 & temp2 != 1): 
-      self.disconnect(sock, None) #sangeeth
+
     resp = MQTTV5.Connacks()
-    print("san - inside connect function in MQTTBrokers.py end")
+    print("san - inside connect function in MQTTBrokers.py end : ", resp)
     if packet.ProtocolName != "MQTT":
       self.disconnect(sock, None)
       raise MQTTV5.MQTTException("[MQTT5-3.1.2-1-error] Wrong protocol name %s" % packet.ProtocolName)
@@ -528,13 +529,22 @@ class MQTTBrokers:
     self.broker.connect(me, clean)
     logger.info("[MQTT5-3.2.0-1] the first response to a client must be a connack")
     logger.info("[MQTT5-3.1.4-5] the server must acknowledge the connect with a connack success")
-    resp.reasonCode.set("Success")
+    if(temp1 & temp2 != 1): #sangeeth    
+      #self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True) #sangeeth  
+      #self.disconnectAll()
+      resp.reasonCode.set("Unspecified error")
+      sock.close()
+      #self.disconnectAll()
+      #return    
+    else: resp.reasonCode.set("Success")
     respond(sock, resp)
     me.resend()
 
   def disconnect(self, sock, packet=None, sendWillMessage=False, reasonCode=None, properties=None):
     logger.info("[MQTT-3.14.4-2] Client must not send any more packets after disconnect")
+    print("san - sock in disconnect() : ", sock)
     me = self.clients[sock]
+    print("san - me in disconnect() : ", me)
     me.clearTopicAliases()
     # Session expiry
     if packet and hasattr(packet.properties, "SessionExpiryInterval"):
@@ -768,3 +778,126 @@ class MQTTBrokers:
         # keep alive timeout
         logger.info("[MQTT5-3.1.2-22] keepalive timeout for client %s", client.id)
         self.disconnect(sock, None, sendWillMessage=True)
+
+  def ntpreq(self, sock, packet): #"Introducing ntpreq object to MQTT Brokers - SANGEETH"
+    print("san - inside ntpreq function in MQTTBrokers.py") 
+    temp1=1 #sangeeth
+    temp2=0 #sangeeth
+
+    resp = MQTTV5.NTPReps()
+    print("san - inside ntpreq function in MQTTBrokers.py end : ", resp)
+    if packet.ProtocolName != "MQTT":
+      self.disconnect(sock, None)
+      raise MQTTV5.MQTTException("[MQTT5-3.1.2-1-error] Wrong protocol name %s" % packet.ProtocolName)
+    logger.info("[MQTT5-3.1.2-1] Protocol name must be MQTT")
+    if packet.ProtocolVersion != 5:
+      logger.error("[MQTT5-3.1.2-2-error] Wrong protocol version %d", packet.ProtocolVersion)
+      resp.reasonCode.set("Unsupported protocol version")
+      respond(sock, resp)
+      logger.info("[MQTT5-3.2.2-6] must set session present to 0 with non-zero connack")
+      logger.info("[MQTT5-3.2.2-7] must close connection after connack reason >= 0x80")
+      self.disconnect(sock, None)
+      logger.info("[MQTT5-3.1.4-6] When rejecting connect, no more data must be processed")
+      return
+    logger.info("[MQTT5-3.1.2-2] Protocol version must be 5")
+    if sock in self.clients.keys():    # is socket is already connected?
+      self.disconnect(sock, None)
+      logger.info("[MQTT5-3.1.4-6] When rejecting connect, no more data must be processed")
+      raise MQTTV5.MQTTException("[MQTT5-3.1.0-2] Second connect packet")
+    if len(packet.ClientIdentifier) == 0:
+      packet.ClientIdentifier = str(uuid.uuid4()) # give the client a unique clientid
+      logger.info("[MQTT5-3.1.3-6] 0-length clientid must be assigned a unique id %s", packet.ClientIdentifier)
+      resp.properties.AssignedClientIdentifier = packet.ClientIdentifier # returns the assigned client id
+      logger.info("[MQTT5-3.1.3-7] must return the assigned client id")
+    else:
+      logger.info("[MQTT5-3.1.3-5] Clientids of 1 to 23 chars and ascii alphanumeric must be allowed")
+      if False: # reject clientid test
+        logger.info("[MQTT5-3.1.3-8] server rejects clientid - may return connack")
+    if packet.ClientIdentifier in [client.id for client in self.clients.values()]: # is this client already connected on a different socket?
+      for cursock in self.clients.keys():
+        if self.clients[cursock].id == packet.ClientIdentifier:
+          logger.info("[MQTT5-3.1.4-3] Disconnecting old client %s", packet.ClientIdentifier)
+          self.disconnect(cursock, reasonCode="Session taken over")
+          break
+    me = None
+    clean = False
+    if packet.CleanStart:
+      logger.info("[MQTT5-3.1.2-4] discard existing session when cleanstart set to 1")
+      logger.info("[MQTT5-3.1.4-4] server must perform clean start processing")
+      clean = True
+      logger.info("[MQTT5-3.2.2-2] session present must be set to 0 if cleanstart is 1")
+    else:
+      me = self.broker.getClient(packet.ClientIdentifier) # find existing state, if there is any
+      if not me:
+        logger.info("[MQTT5-3.1.2-6] no existing session and cleanstart set to 0")
+      # has that state expired?
+      if me and me.sessionExpiryInterval >= 0 and time.monotonic() - me.sessionEndedTime > me.sessionExpiryInterval:
+        me = None
+        clean = True
+      else:
+        logger.info("[MQTT5-3.1.2-5] resume an existing session when cleanstart set to 0")
+      if me:
+        logger.info("[MQTT5-3.1.3-2] clientid used to retrieve client state")
+        logger.info("[MQTT5-3.2.2-3] session present must be set to 1")
+    resp.sessionPresent = True if me else False
+    # Connack topic alias maximum for incoming client created topic aliases
+    if self.options["topicAliasMaximum"] > 0:
+      resp.properties.TopicAliasMaximum = self.options["topicAliasMaximum"]
+    if self.options["maximumPacketSize"] < MQTTV5.MAX_PACKET_SIZE:
+      resp.properties.MaximumPacketSize = self.options["maximumPacketSize"]
+    if self.options["receiveMaximum"] < MQTTV5.MAX_PACKETID:
+      resp.properties.ReceiveMaximum = self.options["receiveMaximum"]
+    keepalive = packet.KeepAliveTimer
+    if packet.KeepAliveTimer > 0 and self.options["serverKeepAlive"] < packet.KeepAliveTimer:
+      keepalive = self.options["serverKeepAlive"]
+      resp.properties.ServerKeepAlive = keepalive
+      logger.info("[MQTT5-3.1.2-21] client must use server keep alive if returned on connack")
+    # Session expiry
+    if hasattr(packet.properties, "SessionExpiryInterval"):
+      sessionExpiryInterval = packet.properties.SessionExpiryInterval
+    else:
+      sessionExpiryInterval = 0 # immediate expiry - change to spec
+    # will delay
+    willDelayInterval = 0
+    if hasattr(packet.WillProperties, "WillDelayInterval"):
+      willDelayInterval = packet.WillProperties.WillDelayInterval
+      delattr(packet.WillProperties, "WillDelayInterval") # must not be sent with will message
+    if willDelayInterval > sessionExpiryInterval:
+      willDelayInterval = sessionExpiryInterval
+    if me == None:
+      me = MQTTClients(packet.ClientIdentifier, packet.CleanStart, sessionExpiryInterval, willDelayInterval, keepalive, sock, self)
+    else:
+      me.socket = sock # set existing client state to new socket
+      me.cleanStart = packet.CleanStart
+      me.keepalive = keepalive
+      me.sessionExpiryInterval = sessionExpiryInterval
+      me.willDelayInterval = willDelayInterval
+    if me.delayedWillTime:
+      me.delayedWillTime = None
+      logger.info("[MQTT5-3.1.3-9] don't send delayed will if client connects in time")
+    if me.id in self.broker.willMessageClients:
+      self.broker.willMessageClients.remove(me.id)
+    # the topic alias maximum in the connect properties sets the maximum outgoing topic aliases for a client
+    me.topicAliasMaximum = packet.properties.TopicAliasMaximum if hasattr(packet.properties, "TopicAliasMaximum") else 0
+    me.maximumPacketSize = packet.properties.MaximumPacketSize if hasattr(packet.properties, "MaximumPacketSize") else MQTTV5.MAX_PACKET_SIZE
+    assert me.maximumPacketSize <= MQTTV5.MAX_PACKET_SIZE # is this the correct value?
+    me.receiveMaximum = packet.properties.ReceiveMaximum if hasattr(packet.properties, "ReceiveMaximum") else MQTTV5.MAX_PACKETID
+    assert me.receiveMaximum <= MQTTV5.MAX_PACKETID
+    logger.info("[MQTT-4.1.0-1] server must store data for at least as long as the network connection lasts")
+    self.clients[sock] = me
+    me.will = (packet.WillTopic, packet.WillQoS, packet.WillMessage, packet.WillRETAIN, packet.WillProperties) if packet.WillFlag else None
+    if me.will != None:
+      logger.info("[MQTT5-3.1.2-7] the will message must be stored if the WillFlag is set")
+    self.broker.connect(me, clean)
+    logger.info("[MQTT5-3.2.0-1] the first response to a client must be a connack")
+    logger.info("[MQTT5-3.1.4-5] the server must acknowledge the connect with a connack success")
+    if(temp1 & temp2 != 1): #sangeeth    
+      #self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True) #sangeeth  
+      #self.disconnectAll()
+      resp.reasonCode.set("Unspecified error")
+      sock.close()
+      #self.disconnectAll()
+      #return    
+    else: resp.reasonCode.set("Success")
+    respond(sock, resp)
+    me.resend()

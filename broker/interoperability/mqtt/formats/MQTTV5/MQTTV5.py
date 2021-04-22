@@ -47,12 +47,12 @@ MAX_PACKETID = 2**16-1
 
 class PacketTypes:
 
-  indexes = range(1, 17)
+  indexes = range(1, 18)
 
   # Packet types
   CONNECT, CONNACK, PUBLISH, PUBACK, PUBREC, PUBREL, \
   PUBCOMP, SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, \
-  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ = indexes
+  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ, NTPREP = indexes
 
   # Dummy packet type for properties use - will delay only applies to will
   WILLMESSAGE = 99
@@ -63,7 +63,7 @@ class Packets(object):
   Names = [ "reserved", \
     "Connect", "Connack", "Publish", "Puback", "Pubrec", "Pubrel", \
     "Pubcomp", "Subscribe", "Suback", "Unsubscribe", "Unsuback", \
-    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq"]
+    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq", "NTPrep"]
 
   classNames = [name+'es' if name == "Publish" else
                 name+'s' if name != "reserved" else name for name in Names]
@@ -352,6 +352,11 @@ class FixedHeaders(object):
       }
 
   def pack(self, length):
+    print("nethmi 0 : ", length)
+    print("PacketType : ", self.PacketType)
+    print("DUP : ", self.DUP)
+    print("QoS : ", self.QoS)
+    print("RETAIN : ", self.RETAIN)
     "pack data into string buffer ready for transmission down socket"
     buffer = bytes([(self.PacketType << 4) | (self.DUP << 3) |\
                          (self.QoS << 1) | self.RETAIN])
@@ -1885,9 +1890,68 @@ class NTPReqs(Packets):
     return rc
 
 
+class NTPReps(Packets):
+
+  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False, ReasonCode="Success"):
+    object.__setattr__(self, "names",
+         ["fh", "sessionPresent", "reasonCode", "properties"])
+    print("san NTPReps - inside NTPReps init function")
+    self.fh = FixedHeaders(PacketTypes.NTPREP)
+    self.fh.DUP = DUP
+    self.fh.QoS = QoS
+    self.fh.RETAIN = RETAIN
+    self.sessionPresent = False
+    self.reasonCode = ReasonCodes(PacketTypes.CONNACK, ReasonCode)
+    self.properties = Properties(PacketTypes.CONNACK)
+    if buffer != None:
+      self.unpack(buffer)
+
+  def pack(self):
+    print("san NTPReps - inside NTPReps pack function")  
+    flags = 0x01 if self.sessionPresent else 0x00
+    logger.info("[MQTT5-3.2.2-1] bits 7-1 of the connack flags are reserved and must be set to 0")
+    buffer = bytes([flags])
+    buffer += self.reasonCode.pack()
+    buffer += self.properties.pack()
+    print("san NTPReps - self.fh : ", self.fh)
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+
+  def unpack(self, buffer, maximumPacketSize):
+    assert len(buffer) >= 4
+    assert PacketType(buffer) == PacketTypes.NTPREP
+    curlen = self.fh.unpack(buffer, maximumPacketSize)
+    assert buffer[curlen] in [0, 1], "Connect Acknowledge Flags"
+    self.sessionPresent = (buffer[curlen] == 0x01)
+    curlen += 1
+    curlen += self.reasonCode.unpack(buffer[curlen:])
+    curlen += self.properties.unpack(buffer[curlen:])[1]
+    assert self.fh.DUP == False, "[MQTT5-2.1.3-1]"
+    assert self.fh.QoS == 0, "[MQTT5-2.1.3-1]"
+    assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1]"
+
+  def __str__(self):
+    return str(self.fh)+", Session present="+str((self.sessionPresent & 0x01) == 1)+\
+          ", ReturnCode="+str(self.reasonCode)+\
+          ", properties="+str(self.properties)+")"
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "SessionPresent": (self.sessionPresent & 0x01) == 1,
+      "ReturnCode": str(self.reasonCode),
+      "Properties": self.properties.json(),
+    }
+    return data
+
+  def __eq__(self, packet):
+    return Packets.__eq__(self, packet) and \
+           self.reasonCode == packet.reasonCode
+
+
 classes = [Connects, Connacks, Publishes, Pubacks, Pubrecs,
            Pubrels, Pubcomps, Subscribes, Subacks, Unsubscribes,
-           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs]
+           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs, NTPReps]
 #==============sangeeth============================
 def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
   print("san-inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")
