@@ -49,7 +49,9 @@ def respond(sock, packet, maximumPacketSize=500):
     logger.info("[MQTT5-3.1.2-25] message must be discarded and behave as if it had been sent")
     return
   if hasattr(sock, "fileno"):
+    print("san - hasattr condition in respond function in MQTTBRokers.py")  
     packet_string = str(packet)
+    print(" san - packet_string : ",packet_string)
     if len(packet_string) > 256:
       packet_string = packet_string[:255] + '...' + (' payload length:' + str(len(packet.data)) if hasattr(packet, "data") else "")
     logger.debug("out: (%d) %s", sock.fileno(), packet_string)
@@ -781,9 +783,6 @@ class MQTTBrokers:
 
   def ntpreq(self, sock, packet): #"Introducing ntpreq object to MQTT Brokers - SANGEETH"
     print("san - inside ntpreq function in MQTTBrokers.py") 
-    temp1=1 #sangeeth
-    temp2=0 #sangeeth
-
     resp = MQTTV5.NTPReps()
     print("san - inside ntpreq function in MQTTBrokers.py end : ", resp)
     if packet.ProtocolName != "MQTT":
@@ -891,13 +890,6 @@ class MQTTBrokers:
     self.broker.connect(me, clean)
     logger.info("[MQTT5-3.2.0-1] the first response to a client must be a connack")
     logger.info("[MQTT5-3.1.4-5] the server must acknowledge the connect with a connack success")
-    if(temp1 & temp2 != 1): #sangeeth    
-      #self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True) #sangeeth  
-      #self.disconnectAll()
-      resp.reasonCode.set("Unspecified error")
-      sock.close()
-      #self.disconnectAll()
-      #return    
-    else: resp.reasonCode.set("Success")
+    resp.reasonCode.set("Success")
     respond(sock, resp)
     me.resend()

@@ -340,8 +340,14 @@ class FixedHeaders(object):
 
   def __str__(self):
     "return printable representation of our data"
+    #if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
+     # self.PacketType = self.PacketType + 1
+    if(self.PacketType == 0x12): self.PacketType=self.PacketType-1  
+    print("san __str__ self.PacketType : ", self.PacketType)
     return Packets.classNames[self.PacketType]+'(fh.DUP='+str(self.DUP)+ \
            ", fh.QoS="+str(self.QoS)+", fh.RETAIN="+str(self.RETAIN)
+           #+ \
+           #", fh.ntpReq="+str(self.ntpReq)+", fh.ntpRep="+str(self.ntpRep)
 
   def json(self):
     return {
@@ -358,7 +364,12 @@ class FixedHeaders(object):
     print("QoS : ", self.QoS)
     print("RETAIN : ", self.RETAIN)
     "pack data into string buffer ready for transmission down socket"
-    buffer = bytes([(self.PacketType << 4) | (self.DUP << 3) |\
+    if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
+      self.PacketType = self.PacketType + 1
+      buffer = bytes([(self.PacketType) | (self.DUP << 3) |\
+                         (self.QoS << 1) | self.RETAIN])
+    else:
+      buffer = bytes([(self.PacketType << 4) | (self.DUP << 3) |\
                          (self.QoS << 1) | self.RETAIN])
     self.remainingLength = length
     print("nethmi 1 : ", buffer)
@@ -935,6 +946,7 @@ class Connacks(Packets):
     buffer += self.reasonCode.pack()
     buffer += self.properties.pack()
     buffer = self.fh.pack(len(buffer)) + buffer
+    print("san Connacks - buffer : ", buffer)
     return buffer
 
   def unpack(self, buffer, maximumPacketSize):
@@ -1915,6 +1927,7 @@ class NTPReps(Packets):
     buffer += self.properties.pack()
     print("san NTPReps - self.fh : ", self.fh)
     buffer = self.fh.pack(len(buffer)) + buffer
+    print("san NTPReps - buffer : ", buffer)
     return buffer
 
   def unpack(self, buffer, maximumPacketSize):
