@@ -25,6 +25,7 @@ so that the tests that use this package can send invalid data for error testing.
 """
 
 import logging, struct
+import os
 
 logger = logging.getLogger('MQTT broker')
 
@@ -226,6 +227,8 @@ class ReasonCodes:
             [PacketTypes.SUBACK, PacketTypes.DISCONNECT] },
     162 : { "Wildcard subscription not supported" :
             [PacketTypes.SUBACK, PacketTypes.DISCONNECT] },
+    163 : { "Client and server not reside within the same time frame" :
+            [PacketTypes.CONNACK] },    
     }
     if identifier == -1:
       self.set(aName)
@@ -710,7 +713,8 @@ class Connects(Packets):
          ["fh", "properties", "WillProperties", "ProtocolName", "ProtocolVersion",
           "ClientIdentifier", "CleanStart", "KeepAliveTimer",
           "WillFlag", "WillQoS", "WillRETAIN", "WillTopic", "WillMessage",
-          "usernameFlag", "passwordFlag", "username", "password"])
+          "usernameFlag", "passwordFlag", "username", "password", "timercv",
+          "timesys", "lentimercv", "lentimesys"])
 
     print("san - Connects class init function")#sangeeth
     self.fh = FixedHeaders(PacketTypes.CONNECT)
@@ -814,9 +818,10 @@ class Connects(Packets):
       logger.info("[MQTT5-3.1.3-4] Clientid must be a UTF-8 encoded string")
       self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       curlen += valuelen
-      print("curlen client identifier : ",curlen)
-      sangeeth, valuelen = readUTF(buffer[curlen:], packlen - curlen)
-      print(valuelen,"  ",sangeeth)
+      print("curlen client identifier : ",curlen)     
+      self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+      self.timesys = os.popen('date +%s').read()
+      print(valuelen,"  ",self.timercv)
       curlen += valuelen
       print("curlen remaining data: ",curlen)
 
@@ -858,8 +863,23 @@ class Connects(Packets):
     except:
       traceback.print_exc()
       logger.exception("[MQTT5-3.1.4-1] server must validate connect packet and close connection without connack if it does not conform")
-      raise
+      raise  
 
+  def _isInSameTimeZone(self):
+    #self.timercv = str(self.timercv)
+    #self.timesys = str(self.timesys)
+    self.lentimercv = len(str(self.timercv))
+    self.lentimesys = len(str(self.timesys))
+    print(self.timercv," ", self.timesys," ",self.lentimercv,"  ",self.lentimesys,\
+          " ",self.timercv[0:self.lentimercv-2]," ",self.timesys[0:self.lentimesys-2])
+    if (self.lentimercv == self.lentimesys) and (self.timercv\
+       [0:self.lentimercv-2] == self.timesys[0:self.lentimesys-2]):
+      print("isInSameTimeZone : YES")
+      return True
+    else:
+      print("isInSameTimeZone : NO")
+      return False
+  
   def __str__(self):
     buf = str(self.fh)+", ProtocolName="+str(self.ProtocolName)+", ProtocolVersion=" +\
           str(self.ProtocolVersion)+", CleanStart="+str(self.CleanStart) +\
@@ -1795,10 +1815,11 @@ class NTPReqs(Packets):
       self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       curlen += valuelen
       print("curlen client identifier : ",curlen)
-      #sangeeth, valuelen = readUTF(buffer[curlen:], packlen - curlen)
-      #print(valuelen,"  ",sangeeth)
+      #self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+      #self.timesys = os.popen('date +%s').read()
+      #print(valuelen,"  ",self.timercv)
       #curlen += valuelen
-      #print("curlen remaining data: ",curlen)
+      print("curlen remaining data: ",curlen)
 
       if self.WillFlag:
         curlen += self.WillProperties.unpack(buffer[curlen:])[1]

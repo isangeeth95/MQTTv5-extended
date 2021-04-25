@@ -421,9 +421,6 @@ class MQTTBrokers:
 
   def connect(self, sock, packet):
     print("san - inside connect function in MQTTBrokers.py") 
-    temp1=1 #sangeeth
-    temp2=0 #sangeeth
-
     resp = MQTTV5.Connacks()
     print("san - inside connect function in MQTTBrokers.py end : ", resp)
     if packet.ProtocolName != "MQTT":
@@ -531,14 +528,15 @@ class MQTTBrokers:
     self.broker.connect(me, clean)
     logger.info("[MQTT5-3.2.0-1] the first response to a client must be a connack")
     logger.info("[MQTT5-3.1.4-5] the server must acknowledge the connect with a connack success")
-    if(temp1 & temp2 != 1): #sangeeth    
+    if(MQTTV5.Connects._isInSameTimeZone(packet)): #sangeeth    
       #self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True) #sangeeth  
       #self.disconnectAll()
-      resp.reasonCode.set("Unspecified error")
-      sock.close()
+      resp.reasonCode.set("Success")
       #self.disconnectAll()
       #return    
-    else: resp.reasonCode.set("Success")
+    else: 
+      resp.reasonCode.set("Client and server not reside within the same time frame")
+      sock.close()
     respond(sock, resp)
     me.resend()
 
