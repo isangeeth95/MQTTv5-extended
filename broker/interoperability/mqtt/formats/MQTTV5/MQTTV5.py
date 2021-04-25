@@ -1,16 +1,13 @@
 """
 *******************************************************************
   Copyright (c) 2013, 2019 IBM Corp.
-
   All rights reserved. This program and the accompanying materials
   are made available under the terms of the Eclipse Public License v1.0
   and Eclipse Distribution License v1.0 which accompany this distribution.
-
   The Eclipse Public License is available at
      http://www.eclipse.org/legal/epl-v10.html
   and the Eclipse Distribution License is available at
     http://www.eclipse.org/org/documents/edl-v10.php.
-
   Contributors:
      Ian Craggs - initial implementation and/or documentation
      Ian Craggs - take MQTT 3.1.1 and create MQTT 5.0 version
@@ -18,10 +15,8 @@
 """
 
 """
-
 Assertions are used to validate incoming data, but are omitted from outgoing packets.  This is
 so that the tests that use this package can send invalid data for error testing.
-
 """
 
 import logging, struct
@@ -48,12 +43,12 @@ MAX_PACKETID = 2**16-1
 
 class PacketTypes:
 
-  indexes = range(1, 18)
+  indexes = range(1, 21)
 
   # Packet types
   CONNECT, CONNACK, PUBLISH, PUBACK, PUBREC, PUBREL, \
   PUBCOMP, SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, \
-  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ, NTPREP = indexes
+  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ, NTPREP, ABCTWO, ABCTHREE, AUTHACK = indexes
 
   # Dummy packet type for properties use - will delay only applies to will
   WILLMESSAGE = 99
@@ -64,7 +59,7 @@ class Packets(object):
   Names = [ "reserved", \
     "Connect", "Connack", "Publish", "Puback", "Pubrec", "Pubrel", \
     "Pubcomp", "Subscribe", "Suback", "Unsubscribe", "Unsuback", \
-    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq", "NTPrep"]
+    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq", "NTPrep", "Abctwo", "Abcthree", "Authack"]
 
   classNames = [name+'es' if name == "Publish" else
                 name+'s' if name != "reserved" else name for name in Names]
@@ -94,7 +89,8 @@ def PacketType(byte):
     rc = byte[0] >> 4
     if (rc & 0x01 == 1) and (byte[0] & 0x0F != 0) :
       rc = byte[0] - 1
-    
+    if(rc & 0xF0 == 0xF0) and (byte[0] & 0x0F != 0):
+      rc = byte[0] - 1
   else:
     rc = None    
   print("san----- packetType: ",rc)
@@ -103,7 +99,6 @@ def PacketType(byte):
 class ReasonCodes:
   """
     The reason code used in MQTT V5.0
-
   """
 
   def __getName__(self, packetType, identifier):
@@ -168,19 +163,19 @@ class ReasonCodes:
     25 : { "Re-authenticate" : [PacketTypes.AUTH] },
     128 : { "Unspecified error" : [PacketTypes.CONNACK, PacketTypes.PUBACK,
       PacketTypes.PUBREC, PacketTypes.SUBACK, PacketTypes.UNSUBACK,
-      PacketTypes.DISCONNECT], },
+      PacketTypes.DISCONNECT, PacketTypes.AUTHACK], },
     129 : { "Malformed packet" :
           [PacketTypes.CONNACK, PacketTypes.DISCONNECT] },
     130 : { "Protocol error" :
           [PacketTypes.CONNACK, PacketTypes.DISCONNECT] },
     131 : { "Implementation specific error": [PacketTypes.CONNACK,
           PacketTypes.PUBACK, PacketTypes.PUBREC, PacketTypes.SUBACK,
-          PacketTypes.UNSUBACK, PacketTypes.DISCONNECT], },
+          PacketTypes.UNSUBACK, PacketTypes.DISCONNECT, PacketTypes.AUTHACK], },
     132 : { "Unsupported protocol version" : [PacketTypes.CONNACK] },
     133 : { "Client identifier not valid" : [PacketTypes.CONNACK] },
     134 : { "Bad user name or password" : [PacketTypes.CONNACK] },
     135 : { "Not authorized" : [PacketTypes.CONNACK, PacketTypes.PUBACK,
-              PacketTypes.PUBREC, PacketTypes.SUBACK, PacketTypes.UNSUBACK,
+              PacketTypes.PUBREC, PacketTypes.AUTHACK, PacketTypes.SUBACK, PacketTypes.UNSUBACK,
               PacketTypes.DISCONNECT], },
     136 : { "Server unavailable" : [PacketTypes.CONNACK] },
     137 : { "Server busy" : [PacketTypes.CONNACK, PacketTypes.DISCONNECT] },
@@ -205,7 +200,7 @@ class ReasonCodes:
     149 : { "Packet too large": [PacketTypes.CONNACK, PacketTypes.DISCONNECT] },
     150 : { "Message rate too high": [PacketTypes.DISCONNECT] },
     151 : { "Quota exceeded": [PacketTypes.CONNACK, PacketTypes.PUBACK,
-          PacketTypes.PUBREC, PacketTypes.SUBACK, PacketTypes.DISCONNECT], },
+          PacketTypes.PUBREC, PacketTypes.SUBACK, PacketTypes.DISCONNECT, PacketTypes.AUTHACK], },
     152 : { "Administrative action" : [PacketTypes.DISCONNECT] },
     153 : { "Payload format invalid" :
             [PacketTypes.PUBACK, PacketTypes.PUBREC, PacketTypes.DISCONNECT]},
@@ -345,7 +340,8 @@ class FixedHeaders(object):
     "return printable representation of our data"
     #if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
      # self.PacketType = self.PacketType + 1
-    if(self.PacketType == 0x12): self.PacketType=self.PacketType-1  
+    if(self.PacketType == 0x12): self.PacketType=self.PacketType-1 
+    if(self.PacketType == 0x14): self.PacketType = self.PacketType - 1
     print("san __str__ self.PacketType : ", self.PacketType)
     return Packets.classNames[self.PacketType]+'(fh.DUP='+str(self.DUP)+ \
            ", fh.QoS="+str(self.QoS)+", fh.RETAIN="+str(self.RETAIN)
@@ -498,46 +494,46 @@ class Properties(object):
 
     self.properties = {
     # id:  type, packets
-      1  : (self.types.index("Byte"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE]), # payload format indicator
-      2  : (self.types.index("Four Byte Integer"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE]),
-      3  : (self.types.index("UTF-8 Encoded String"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE]),
-      8  : (self.types.index("UTF-8 Encoded String"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE]),
-      9  : (self.types.index("Binary Data"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE]),
+      1  : (self.types.index("Byte"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE, PacketTypes.AUTH]),
+      2  : (self.types.index("Four Byte Integer"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE, PacketTypes.AUTH]),
+      3  : (self.types.index("UTF-8 Encoded String"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE, PacketTypes.AUTH]),
+      8  : (self.types.index("UTF-8 Encoded String"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE, PacketTypes.AUTH]),
+      9  : (self.types.index("Binary Data"), [PacketTypes.PUBLISH, PacketTypes.WILLMESSAGE, PacketTypes.AUTH]),
       11 : (self.types.index("Variable Byte Integer"),
            [PacketTypes.PUBLISH, PacketTypes.SUBSCRIBE]),
       17 : (self.types.index("Four Byte Integer"),
            [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.DISCONNECT]),
-      18 : (self.types.index("UTF-8 Encoded String"), [PacketTypes.CONNACK]),
-      19 : (self.types.index("Two Byte Integer"), [PacketTypes.CONNACK]),
+      18 : (self.types.index("UTF-8 Encoded String"), [PacketTypes.CONNACK, PacketTypes.AUTHACK]),
+      19 : (self.types.index("Two Byte Integer"), [PacketTypes.CONNACK, PacketTypes.AUTHACK]),
       21 : (self.types.index("UTF-8 Encoded String"),
-           [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.AUTH]),
+           [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.AUTH, PacketTypes.AUTHACK]),
       22 : (self.types.index("Binary Data"),
-           [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.AUTH]),
+           [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.AUTH, PacketTypes.AUTHACK]),
       23 : (self.types.index("Byte"),
            [PacketTypes.CONNECT]),
       24 : (self.types.index("Four Byte Integer"), [PacketTypes.WILLMESSAGE]),
       25 : (self.types.index("Byte"), [PacketTypes.CONNECT]),
-      26 : (self.types.index("UTF-8 Encoded String"), [PacketTypes.CONNACK]),
+      26 : (self.types.index("UTF-8 Encoded String"), [PacketTypes.CONNACK, PacketTypes.AUTHACK]),
       28 : (self.types.index("UTF-8 Encoded String"),
-           [PacketTypes.CONNACK, PacketTypes.DISCONNECT]),
+           [PacketTypes.CONNACK, PacketTypes.DISCONNECT, PacketTypes.AUTHACK]),
       31 : (self.types.index("UTF-8 Encoded String"),
            [PacketTypes.CONNACK, PacketTypes.PUBACK, PacketTypes.PUBREC,
             PacketTypes.PUBREL, PacketTypes.PUBCOMP, PacketTypes.SUBACK,
-            PacketTypes.UNSUBACK, PacketTypes.DISCONNECT, PacketTypes.AUTH]),
+            PacketTypes.UNSUBACK, PacketTypes.DISCONNECT, PacketTypes.AUTH, PacketTypes.AUTHACK]),
       33 : (self.types.index("Two Byte Integer"),
-           [PacketTypes.CONNECT, PacketTypes.CONNACK]),
+           [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.AUTHACK]),
       34 : (self.types.index("Two Byte Integer"),
-           [PacketTypes.CONNECT, PacketTypes.CONNACK]),
-      35 : (self.types.index("Two Byte Integer"), [PacketTypes.PUBLISH]),
-      36 : (self.types.index("Byte"), [PacketTypes.CONNACK]),
-      37 : (self.types.index("Byte"), [PacketTypes.CONNACK]),
+           [PacketTypes.CONNECT, PacketTypes.CONNACK, PacketTypes.AUTHACK]),
+      35 : (self.types.index("Two Byte Integer"), [PacketTypes.PUBLISH, PacketTypes.AUTH]),
+      36 : (self.types.index("Byte"), [PacketTypes.CONNACK, PacketTypes.AUTHACK]),
+      37 : (self.types.index("Byte"), [PacketTypes.CONNACK, PacketTypes.AUTHACK]),
       38 : (self.types.index("UTF-8 String Pair"),
            [PacketTypes.CONNECT, PacketTypes.CONNACK,
            PacketTypes.PUBLISH, PacketTypes.PUBACK,
            PacketTypes.PUBREC, PacketTypes.PUBREL, PacketTypes.PUBCOMP,
            PacketTypes.SUBSCRIBE, PacketTypes.SUBACK,
            PacketTypes.UNSUBSCRIBE, PacketTypes.UNSUBACK,
-           PacketTypes.DISCONNECT, PacketTypes.AUTH, PacketTypes.WILLMESSAGE]),
+           PacketTypes.DISCONNECT, PacketTypes.AUTH, PacketTypes.WILLMESSAGE, PacketTypes.AUTHACK]),
       39 : (self.types.index("Four Byte Integer"),
            [PacketTypes.CONNECT, PacketTypes.CONNACK]),
       40 : (self.types.index("Byte"), [PacketTypes.CONNACK]),
@@ -1653,14 +1649,15 @@ class Auths(Packets):
   def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
           reasonCode="Success"):
     object.__setattr__(self, "names",
-        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties", "ProtocolVersion"])
     self.fh = FixedHeaders(PacketTypes.AUTH)
     self.fh.DUP = DUP
     self.fh.QoS = QoS
     self.fh.RETAIN = RETAIN
+    self.ProtocolVersion = 5
     # variable header
-    self.reasonCode = ReasonCodes(PacketTypes.AUTH, reasonCode)
-    self.properties = Properties(PacketTypes.AUTH)
+    self.reasonCode = ReasonCodes(PacketTypes.CONNACK, reasonCode)
+    #self.properties = Properties(PacketTypes.AUTH)
     if buffer != None:
       self.unpack(buffer)
 
@@ -1680,14 +1677,14 @@ class Auths(Packets):
     assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
     curlen = fhlen
     curlen += self.reasonCode.unpack(buffer[curlen:])
-    curlen += self.properties.unpack(buffer[curlen:])[1]
-    assert curlen == fhlen + self.fh.remainingLength, \
-            "AUTH packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    #curlen += self.properties.unpack(buffer[curlen:])[1]
+    #assert curlen == fhlen + self.fh.remainingLength, \
+    #        "AUTH packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
     return fhlen + self.fh.remainingLength
 
   def __str__(self):
-    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
-
+    #return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)
   def json(self):
     data = {
       "fh": self.fh.json(),
@@ -1982,10 +1979,174 @@ class NTPReps(Packets):
     return Packets.__eq__(self, packet) and \
            self.reasonCode == packet.reasonCode
 
+class Abctwos(Packets):
+
+  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
+          reasonCode="Success"):
+    object.__setattr__(self, "names",
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+    self.fh = FixedHeaders(PacketTypes.ABCTWO)
+    self.fh.DUP = DUP
+    self.fh.QoS = QoS
+    self.fh.RETAIN = RETAIN
+    # variable header
+    self.reasonCode = ReasonCodes(PacketTypes.ABCTWO, reasonCode)
+    self.properties = Properties(PacketTypes.ABCTWO)
+    if buffer != None:
+      self.unpack(buffer)
+
+  def pack(self):
+    buffer = self.reasonCode.pack()
+    buffer += self.properties.pack()
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+
+  def unpack(self, buffer, maximumPacketSize):
+    assert len(buffer) >= 2
+    assert PacketType(buffer) == PacketTypes.ABCTWO
+    fhlen = self.fh.unpack(buffer, maximumPacketSize)
+    assert len(buffer) >= fhlen + self.fh.remainingLength
+    assert self.fh.DUP == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.QoS == 0, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    curlen = fhlen
+    curlen += self.reasonCode.unpack(buffer[curlen:])
+    curlen += self.properties.unpack(buffer[curlen:])[1]
+    assert curlen == fhlen + self.fh.remainingLength, \
+            "packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    return fhlen + self.fh.remainingLength
+
+  def __str__(self):
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "ReasonCode": str(self.reasonCode),
+      "Properties": self.properties.json(),
+    }
+    return data
+
+  def __eq__(self, packet):
+    return Packets.__eq__(self, packet) and \
+           self.reasonCode == packet.reasonCode and \
+           self.properties == packet.properties
+
+class Abcthrees(Packets):
+
+  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
+          reasonCode="Success"):
+    object.__setattr__(self, "names",
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+    self.fh = FixedHeaders(PacketTypes.ABCTHREE)
+    self.fh.DUP = DUP
+    self.fh.QoS = QoS
+    self.fh.RETAIN = RETAIN
+    # variable header
+    self.reasonCode = ReasonCodes(PacketTypes.ABCTHREE, reasonCode)
+    self.properties = Properties(PacketTypes.ABCTHREE)
+    if buffer != None:
+      self.unpack(buffer)
+
+  def pack(self):
+    buffer = self.reasonCode.pack()
+    buffer += self.properties.pack()
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+
+  def unpack(self, buffer, maximumPacketSize):
+    assert len(buffer) >= 2
+    assert PacketType(buffer) == PacketTypes.ABCTHREE
+    fhlen = self.fh.unpack(buffer, maximumPacketSize)
+    assert len(buffer) >= fhlen + self.fh.remainingLength
+    assert self.fh.DUP == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.QoS == 0, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    curlen = fhlen
+    curlen += self.reasonCode.unpack(buffer[curlen:])
+    curlen += self.properties.unpack(buffer[curlen:])[1]
+    assert curlen == fhlen + self.fh.remainingLength, \
+            "packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    return fhlen + self.fh.remainingLength
+
+  def __str__(self):
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "ReasonCode": str(self.reasonCode),
+      "Properties": self.properties.json(),
+    }
+    return data
+
+  def __eq__(self, packet):
+    return Packets.__eq__(self, packet) and \
+           self.reasonCode == packet.reasonCode and \
+           self.properties == packet.properties
+
+class Authacks(Packets):
+
+  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
+          reasonCode="Success"):
+
+    object.__setattr__(self, "names",
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+    self.fh = FixedHeaders(PacketTypes.AUTHACK)
+    self.fh.DUP = DUP
+    self.fh.QoS = QoS
+    self.fh.RETAIN = RETAIN
+    
+   # variable header
+    self.reasonCode = ReasonCodes(PacketTypes.CONNACK, reasonCode)
+    self.properties = Properties(PacketTypes.CONNACK)
+    
+    if buffer != None:
+      self.unpack(buffer)
+
+
+  def pack(self):
+    buffer = self.reasonCode.pack()
+    buffer += self.properties.pack()
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+
+  def unpack(self, buffer, maximumPacketSize):
+    assert len(buffer) >= 2
+    assert PacketType(buffer) == PacketTypes.AUTHACK
+    fhlen = self.fh.unpack(buffer, maximumPacketSize)
+    assert len(buffer) >= fhlen + self.fh.remainingLength
+    assert self.fh.DUP == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.QoS == 0, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    curlen = fhlen
+    curlen += self.reasonCode.unpack(buffer[curlen:])
+    curlen += self.properties.unpack(buffer[curlen:])[1]
+    assert curlen == fhlen + self.fh.remainingLength, \
+            "AUTHACK packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    return fhlen + self.fh.remainingLength
+
+  def __str__(self):
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "ReasonCode": str(self.reasonCode),
+      "Properties": self.properties.json(),
+    }
+    return data
+
+  def __eq__(self, packet):
+    return Packets.__eq__(self, packet) and \
+           self.reasonCode == packet.reasonCode and \
+           self.properties == packet.properties
+
+
 
 classes = [Connects, Connacks, Publishes, Pubacks, Pubrecs,
            Pubrels, Pubcomps, Subscribes, Subacks, Unsubscribes,
-           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs, NTPReps]
+           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs, NTPReps, Abctwos, Abcthrees, Authacks]
 #==============sangeeth============================
 def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
   print("san-inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")

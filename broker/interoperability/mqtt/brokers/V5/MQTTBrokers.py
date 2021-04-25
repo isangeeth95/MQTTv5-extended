@@ -1,16 +1,13 @@
 """
 *******************************************************************
   Copyright (c) 2013, 2020 IBM Corp.
-
   All rights reserved. This program and the accompanying materials
   are made available under the terms of the Eclipse Public License v1.0
   and Eclipse Distribution License v1.0 which accompany this distribution.
-
   The Eclipse Public License is available at
      http://www.eclipse.org/legal/epl-v10.html
   and the Eclipse Distribution License is available at
     http://www.eclipse.org/org/documents/edl-v10.php.
-
   Contributors:
      Ian Craggs - initial implementation and/or documentation
      Ian Craggs - add sessionPresent connack flag
@@ -621,6 +618,27 @@ class MQTTBrokers:
     resp.reasonCodes = reasonCodes
     respond(sock, resp)
 
+  def auth(self, sock, packet):
+      resp = MQTTV5.Authacks()
+      if packet.ProtocolVersion != 5:
+        logger.error("[MQTT5-3.1.2-2-error] Wrong protocol version %d", packet.ProtocolVersion)
+        resp.reasonCode.set("Unsupported protocol version")
+        respond(sock, resp)
+      logger.info("[MQTT5-3.1.2-2] Protocol version must be 5")
+      if self.options["maximumPacketSize"] < MQTTV5.MAX_PACKET_SIZE:
+        resp.properties.MaximumPacketSize = self.options["maximumPacketSize"]
+      if self.options["receiveMaximum"] < MQTTV5.MAX_PACKETID:
+        resp.properties.ReceiveMaximum = self.options["receiveMaximum"]
+
+    #  resp.packetIdentifier = packet.packetIdentifier
+
+      resp.reasonCode.set("Success")
+      print("Auth reasoncode MQTTBroker...........", resp)
+      respond(sock, resp)
+#    me.resend()
+
+
+
   def publish(self, sock, packet):
     packet.receivedTime = time.monotonic()
     if packet.topicName.find("+") != -1 or packet.topicName.find("#") != -1:
@@ -703,7 +721,6 @@ class MQTTBrokers:
 
   def handleBehaviourPublish(self,sock, topic, data):
     """Handle behaviour packet.
-
     Options:
     Topic: 'cmd/disconnectWithRC', Payload: A Disconnect Return code
             - Disconnects with the specified return code and sample properties.
