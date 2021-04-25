@@ -123,11 +123,11 @@ def multiple(client_id="", hostname="localhost", port=1883, keepalive=60,
             # Assume input is SSLContext object
             client.tls_set_context(tls)
 
-    client.connect(hostname, port, keepalive)
-    #client.ntp_san(hostname, port, keepalive)
+    #client.connect(hostname, port, keepalive)
+    client.ntp_san(hostname, port, keepalive)
     #time.sleep(5)
-    print(client._packet_read())
-    #client.loop_forever()
+    #print(client._packet_read())
+    client.loop_forever()
 
 
 def single(client_id="", qos=0, retain=False, hostname="localhost",

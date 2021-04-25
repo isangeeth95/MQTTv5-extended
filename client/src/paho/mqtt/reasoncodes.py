@@ -117,6 +117,8 @@ class ReasonCodes:
                   [PacketTypes.SUBACK, PacketTypes.DISCONNECT]},
             162: {"Wildcard subscription not supported":
                   [PacketTypes.SUBACK, PacketTypes.DISCONNECT]},
+            163: {"Client and server not reside within the same time farme":
+                  [PacketTypes.CONNACK]},
         }
         if identifier == -1:
             if packetType == PacketTypes.DISCONNECT and aName == "Success":

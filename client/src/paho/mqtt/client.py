@@ -103,6 +103,8 @@ PINGREQ = 0xC0
 PINGRESP = 0xD0
 DISCONNECT = 0xE0
 AUTH = 0xF0
+NTPREQ = 0x11
+NTPREP = 0x12
 
 # Log levels
 MQTT_LOG_INFO = 0x01
@@ -1272,6 +1274,7 @@ class Client(object):
 
         if self._sock in socklist[0] or pending_bytes > 0:
             rc = self.loop_read(max_packets)
+            print("san - rc in loop : ", rc)
             if rc or self._sock is None:
                 return rc
 
@@ -1795,6 +1798,7 @@ class Client(object):
             else:
                 print("ewqas")
                 self._call_socket_unregister_write()
+                #time.sleep(5)
 
     def want_write(self):
         """Call to determine if there is network data waiting to be written.
@@ -2456,6 +2460,7 @@ class Client(object):
         if self._in_packet['command'] == 0:
             try:
                 command = self._sock_recv(1)
+                print("san - 1 command in packet_read : ", command)
             except WouldBlockError:
                 return MQTT_ERR_AGAIN
             except socket.error as err:
@@ -2466,6 +2471,7 @@ class Client(object):
                 if len(command) == 0:
                     return 1
                 command, = struct.unpack("!B", command)
+                print("san - 2 command in packet_read : ", command)                
                 self._in_packet['command'] = command
 
         if self._in_packet['have_remaining'] == 0:
@@ -2481,7 +2487,7 @@ class Client(object):
                     self._easy_log(
                         MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                     return 1
-                else:
+                else:                 
                     if len(byte) == 0:
                         return 1
                     byte, = struct.unpack("!B", byte)
@@ -2494,16 +2500,19 @@ class Client(object):
                     self._in_packet['remaining_length'] += (
                         byte & 127) * self._in_packet['remaining_mult']
                     self._in_packet['remaining_mult'] = self._in_packet['remaining_mult'] * 128
+                    print("sathis error protocol")                       
 
                 if (byte & 128) == 0:
                     break
 
             self._in_packet['have_remaining'] = 1
-            self._in_packet['to_process'] = self._in_packet['remaining_length']
+            print("sathish 2",self._in_packet['remaining_length'])
+            self._in_packet['to_process'] = self._in_packet['remaining_length']        
 
         while self._in_packet['to_process'] > 0:
             try:
                 data = self._sock_recv(self._in_packet['to_process'])
+                print("sathish 3 : ", data)
             except WouldBlockError:
                 return MQTT_ERR_AGAIN
             except socket.error as err:
@@ -2515,6 +2524,7 @@ class Client(object):
                     return 1
                 self._in_packet['to_process'] -= len(data)
                 self._in_packet['packet'] += data
+                print("sathish 4 : ", self._in_packet['packet'])
 
         # All data for this packet is read.
         self._in_packet['pos'] = 0
@@ -2817,7 +2827,8 @@ class Client(object):
         return self._packet_queue(command, packet, 0, 0)
 
     def _send_connect(self, keepalive):
-        date_time=os.popen('date').read() #sangeeth
+        #date_time=os.popen('date +"%d %m %Y %H %M %S"').read() #sangeeth
+        date_time=os.popen('date +%s').read() #sangeeth
         proto_ver = self._protocol
         # hard-coded UTF-8 encoded string
         protocol = b"MQTT" if proto_ver >= MQTTv311 else b"MQIsdp"
@@ -3462,7 +3473,7 @@ class Client(object):
                 print("Q9")
                 self._in_callback_mutex.release()
                 return self.loop_write()
-
+        
         self._call_socket_register_write()
         print("Q10")
         return MQTT_ERR_SUCCESS
@@ -3512,7 +3523,15 @@ class Client(object):
 
 
     def _packet_handle(self):
-        cmd = self._in_packet['command'] & 0xF0
+        print("sathish 5 : ", self._in_packet)
+        
+#        f = self._in_packet['command'] +  self._in_packet['remaining_length'] +  
+        if(self._in_packet['command'] >> 4 & 0x01) and (self._in_packet['command'] & 0x0F != 0):
+    	    cmd = self._in_packet['command']
+        else:
+            cmd = self._in_packet['command'] & 0xF0
+        print("san - cmd : ", cmd)
+        "introducing NTPREP packet handling"
         if cmd == PINGREQ:
             return self._handle_pingreq()
         elif cmd == PINGRESP:
@@ -3538,6 +3557,9 @@ class Client(object):
             return self._handle_disconnect()
         elif cmd == AUTH and self._protocol == MQTTv5:
             return self._handle_auth()
+        elif cmd == NTPREP:
+            print("san - cmd == NTPREP")
+            return self._handle_ntprep()
 
         else:
             # If we don't recognise the command, return an error straight away.
@@ -3559,6 +3581,101 @@ class Client(object):
         self._ping_t = 0
         self._easy_log(MQTT_LOG_DEBUG, "Received PINGRESP")
         return MQTT_ERR_SUCCESS
+        
+        "san - handling ntpreply NTPREP"
+    def _handle_ntprep(self):
+        print("san - inside _handle_ntprep ")
+        rc = 0
+        print("hand1")
+        header = self._in_packet['command']
+        message = MQTTMessage()
+        message.dup = (header & 0x08) >> 3
+        message.qos = (header & 0x06) >> 1
+        message.retain = (header & 0x01)
+
+        pack_format = "!H" + str(len(self._in_packet['packet']) - 2) + 's'
+        (slen, packet) = struct.unpack(pack_format, self._in_packet['packet'])
+        print("san - packet", bytearray(packet))        
+        print("san - pack_format", pack_format)
+        pack_format = '!' + str(slen) + 's' + str(len(packet) - slen) + 's'
+        (topic, packet) = struct.unpack(pack_format, packet)
+        print("san - pack_format", pack_format)
+        print("san - packet", bytearray(packet))        
+        print("hand2")
+
+        if self._protocol != MQTTv5 and len(topic) == 0:
+            print("hand3")
+            return MQTT_ERR_PROTOCOL
+
+        # Handle topics with invalid UTF-8
+        # This replaces an invalid topic with a message and the hex
+        # representation of the topic for logging. When the user attempts to
+        # access message.topic in the callback, an exception will be raised.
+        try:
+            print("hand4")
+            print_topic = topic.decode('utf-8')
+        except UnicodeDecodeError:
+            print("hand5")
+            print_topic = "TOPIC WITH INVALID UTF-8: " + str(topic)
+
+        message.topic = topic
+        print("hand6")
+
+
+        if message.qos > 0:
+            print("hand7")
+            pack_format = "!H" + str(len(packet) - 2) + 's'
+            (message.mid, packet) = struct.unpack(pack_format, packet)
+
+        if self._protocol == MQTTv5:
+            print("hand8")
+            message.properties = Properties(PUBLISH >> 4)
+            props, props_len = message.properties.unpack(packet)
+            packet = packet[props_len:]
+
+        message.payload = packet
+        print("hand9")
+
+        if self._protocol == MQTTv5:
+            print("hand10")
+            self._easy_log(
+                MQTT_LOG_DEBUG,
+                "Received PUBLISH (d%d, q%d, r%d, m%d), '%s', properties=%s, ...  (%d bytes)",
+                message.dup, message.qos, message.retain, message.mid,
+                print_topic, message.properties, len(message.payload)
+            )
+        else:
+            print("hand11")
+            self._easy_log(
+                MQTT_LOG_DEBUG,
+                "Received PUBLISH (d%d, q%d, r%d, m%d), '%s', ...  (%d bytes)",
+                message.dup, message.qos, message.retain, message.mid,
+                print_topic, len(message.payload)
+            )
+
+        message.timestamp = time_func()
+        print("hand12")
+        if message.qos == 0:
+            print("hand13")
+            self._handle_on_message(message)
+            return MQTT_ERR_SUCCESS
+        elif message.qos == 1:
+            print("hand14")
+            rc = self._send_puback(message.mid)
+            self._handle_on_message(message)
+            return rc
+        elif message.qos == 2:
+            print("hand15")
+            rc = self._send_pubrec(message.mid)
+            message.state = mqtt_ms_wait_for_pubrel
+            with self._in_message_mutex:
+                print("hand16")
+                self._in_messages[message.mid] = message
+            return rc
+        else:
+            print("hand17")
+            return MQTT_ERR_PROTOCOL
+
 
     def _handle_connack(self):
         if self._protocol == MQTTv5:
@@ -3616,8 +3733,10 @@ class Client(object):
                 with self._in_callback_mutex:
                     try:
                         if self._protocol == MQTTv5:
-                            self.on_connect(self, self._userdata,
-                                            flags_dict, reason, properties)
+                            self.on_connect(
+                                self, self._userdata, flags_dict, result)
+                            #self.on_connect(self, self._userdata,
+                            #                flags_dict, reason, properties)
                         else:
                             self.on_connect(
                                 self, self._userdata, flags_dict, result)
