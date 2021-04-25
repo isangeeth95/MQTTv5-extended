@@ -1,0 +1,41 @@
+san -  None
+remaining length after :  46
+san - inside _pack_str16 function - data variable :  b''
+len(data) , data :  0 b''
+san - inside _pack_str16 function - data variable :  Sat 24 Apr 2021 06:02:04 AM EDT
+
+san - data = data.encode('utf-8') :  b'Sat 24 Apr 2021 06:02:04 AM EDT\n'
+len(data) , data :  32 b'Sat 24 Apr 2021 06:02:04 AM EDT\n'
+Q1
+Q2
+Q3
+Q4
+Q5
+Q8
+Q9
+trewq
+ewqas
+trewq
+ewqas
+
+Traceback (most recent call last):
+  File "publish.py", line 3, in <module>
+    publish.single("house/main-light", "OFF", hostname="10.0.2.4")
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/publish.py", line 232, in single
+    protocol, transport, proxy_args)
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/publish.py", line 168, in multiple
+    client.loop_forever()
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/client.py", line 1968, in loop_forever
+    rc = self.loop(timeout, max_packets)
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/client.py", line 1274, in loop
+    rc = self.loop_read(max_packets)
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/client.py", line 1757, in loop_read
+    rc = self._packet_read()
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/client.py", line 2521, in _packet_read
+    rc = self._packet_handle()
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/client.py", line 3532, in _packet_handle
+    return self._handle_connack()
+  File "/home/pi/Desktop/paho.mqtt.python/src/paho/mqtt/client.py", line 3620, in _handle_connack
+    flags_dict, reason, properties)
+TypeError: _on_connect() takes 4 positional arguments but 5 were given
+
