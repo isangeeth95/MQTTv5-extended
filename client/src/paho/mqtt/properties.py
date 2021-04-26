@@ -383,11 +383,13 @@ class Properties(object):
         return rc
 
     def unpack(self, buffer):
+        print(" Recieved buffer in Properties : ", buffer)
         if sys.version_info[0] < 3:
             buffer = bytearray(buffer)
         self.clear()
         # deserialize properties into attributes from buffer received from network
         propslen, VBIlen = VariableByteIntegers.decode(buffer)
+        print(propslen, VBIlen)
         buffer = buffer[VBIlen:]  # strip the bytes used by the VBI
         propslenleft = propslen
         while propslenleft > 0:  # properties length is 0 if there are none
