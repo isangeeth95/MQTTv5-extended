@@ -537,6 +537,7 @@ class MQTTBrokers:
     else: 
       resp.reasonCode.set("Client and server not reside within the same time frame")
       sock.close()
+      #self.disconnectAll()
     respond(sock, resp)
     me.resend()
 

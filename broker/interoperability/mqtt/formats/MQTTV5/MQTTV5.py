@@ -345,7 +345,9 @@ class FixedHeaders(object):
     "return printable representation of our data"
     #if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
      # self.PacketType = self.PacketType + 1
-    if(self.PacketType == 0x12): self.PacketType=self.PacketType-1  
+    if(self.PacketType == 0x12): 
+      print("fuck : ", self.PacketType)  
+      self.PacketType=self.PacketType-1  
     print("san __str__ self.PacketType : ", self.PacketType)
     return Packets.classNames[self.PacketType]+'(fh.DUP='+str(self.DUP)+ \
            ", fh.QoS="+str(self.QoS)+", fh.RETAIN="+str(self.RETAIN)
@@ -383,7 +385,7 @@ class FixedHeaders(object):
   def unpack(self, buffer, maximumPacketSize):
     "unpack data from string buffer into separate fields"
     b0 = buffer[0]
-    print("san - printing buffer array fist 3 indexes : " ,buffer[0], buffer[1], buffer[2])
+    print("san - printing buffer array fist 3 indexes : " ,buffer[0], buffer[1])
     self.PacketType = b0 >> 4
     #self.DUP = ((b0 >> 3) & 0x01) == 1
     #self.QoS = (b0 >> 1) & 0x03
@@ -871,9 +873,9 @@ class Connects(Packets):
     self.lentimercv = len(str(self.timercv))
     self.lentimesys = len(str(self.timesys))
     print(self.timercv," ", self.timesys," ",self.lentimercv,"  ",self.lentimesys,\
-          " ",self.timercv[0:self.lentimercv-2]," ",self.timesys[0:self.lentimesys-2])
-    if (self.lentimercv == self.lentimesys) and (self.timercv\
-       [0:self.lentimercv-2] == self.timesys[0:self.lentimesys-2]):
+          " ",self.timercv[0:self.lentimercv-1]," ",self.timesys[0:self.lentimesys-1])
+    print(int(self.timesys[0:self.lentimesys-1]) - int(self.timercv[0:self.lentimercv-1]))
+    if (self.lentimercv == self.lentimesys) and (int(self.timesys[0:self.lentimesys-1]) - int(self.timercv[0:self.lentimercv-1]) <= 5):
       print("isInSameTimeZone : YES")
       return True
     else:
@@ -1925,10 +1927,11 @@ class NTPReqs(Packets):
 
 class NTPReps(Packets):
 
-  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False, ReasonCode="Success"):
+  def __init__(self, buffer=None, srvtime=0, DUP=False, QoS=0, RETAIN=False, ReasonCode="Success"):
     object.__setattr__(self, "names",
-         ["fh", "sessionPresent", "reasonCode", "properties"])
+         ["fh", "sessionPresent", "reasonCode", "properties", "srvtime"])
     print("san NTPReps - inside NTPReps init function")
+    print("fuck 2 : ", PacketTypes.NTPREP)
     self.fh = FixedHeaders(PacketTypes.NTPREP)
     self.fh.DUP = DUP
     self.fh.QoS = QoS
@@ -1936,6 +1939,7 @@ class NTPReps(Packets):
     self.sessionPresent = False
     self.reasonCode = ReasonCodes(PacketTypes.CONNACK, ReasonCode)
     self.properties = Properties(PacketTypes.CONNACK)
+    self.srvtime = srvtime
     if buffer != None:
       self.unpack(buffer)
 
@@ -1946,6 +1950,8 @@ class NTPReps(Packets):
     buffer = bytes([flags])
     buffer += self.reasonCode.pack()
     buffer += self.properties.pack()
+    self.srvtime = os.popen('date +%s').read()
+    buffer += writeUTF(str(self.srvtime))
     print("san NTPReps - self.fh : ", self.fh)
     buffer = self.fh.pack(len(buffer)) + buffer
     print("san NTPReps - buffer : ", buffer)
