@@ -369,7 +369,7 @@ class MQTTBrokers:
             except:
               traceback.print_exc()
           if packet:
-            logger.info("[MQTT5-san-1.6] Recieved packet: %s socket: %s",packet,sock)
+            logger.info("[MQTT5-san-1.6] Received packet: %s socket: %s",packet,sock)
             terminate = self.handlePacket(packet, sock)
           else:
             self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True)
@@ -423,7 +423,7 @@ class MQTTBrokers:
   def connect(self, sock, packet):
     logger.info("[MQTT5-san-9.0] Inside connect function in MQTTBrokers.py")
     resp = MQTTV5.Connacks()
-    logger.info("[MQTT5-san-9.1] Respond recieved from Connacks init in MQTTV5.py. Respond is: %s", resp)
+    logger.info("[MQTT5-san-9.1] Respond received from Connacks init in MQTTV5.py. Respond is: %s", resp)
     if packet.ProtocolName != "MQTT":
       self.disconnect(sock, None)
       raise MQTTV5.MQTTException("[MQTT5-3.1.2-1-error] Wrong protocol name %s" % packet.ProtocolName)
@@ -538,7 +538,8 @@ class MQTTBrokers:
       #return    
     else: 
       resp.reasonCode.set("Client and server not reside within the same time frame")
-      logger.info("[MQTT5-san-9.3] Communication Stops due to closing the sock ")
+      logger.error("[MQTT5-san-9.3] FAILED ATEMPT TO CONNECT TO THE MQTT BROKER ")
+      logger.info("[MQTT5-san-9.4] Communication Stops due to closing the sock ")
       sock.close()
       #self.disconnectAll()
     respond(sock, resp)
@@ -786,7 +787,7 @@ class MQTTBrokers:
   def ntpreq(self, sock, packet): #"Introducing ntpreq object to MQTT Brokers - SANGEETH"
     logger.info("[MQTT5-san-13.0] Inside ntpreq function in MQTTBrokers.py")
     resp = MQTTV5.NTPReps()
-    logger.info("[MQTT5-san-13.1] Respond recieved from NTPReps function: %s",resp)
+    logger.info("[MQTT5-san-13.1] Respond received from NTPReps function: %s",resp)
     if packet.ProtocolName != "MQTT":
       self.disconnect(sock, None)
       raise MQTTV5.MQTTException("[MQTT5-3.1.2-1-error] Wrong protocol name %s" % packet.ProtocolName)

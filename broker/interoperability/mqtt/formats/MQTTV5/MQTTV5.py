@@ -810,7 +810,7 @@ class Connects(Packets):
       curlen += valuelen    
       self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       self.timesys = os.popen('date +%s').read()
-      logger.info("[MQTT5-san-6.1] Recieved value length is %s and recieved data is %s",valuelen,self.timercv )
+      logger.info("[MQTT5-san-6.1] Received value length is %s and received data is %s",valuelen,self.timercv )
       curlen += valuelen
 
       if self.WillFlag:
@@ -1964,7 +1964,7 @@ classes = [Connects, Connacks, Publishes, Pubacks, Pubrecs,
 #==============sangeeth============================
 def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
   logger.info("[MQTT5-san-2.0] Inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")
-  logger.info("[MQTT5-san-2.1] Recieved Buffer: %s",buffer)
+  logger.info("[MQTT5-san-2.1] Received Buffer: %s",buffer)
   if PacketType(buffer) != None:
     packet = classes[PacketType(buffer)-1]()
     logger.info("[MQTT5-san-2.2] Detected Packet: %s",packet)
