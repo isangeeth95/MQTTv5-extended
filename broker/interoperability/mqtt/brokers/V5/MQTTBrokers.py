@@ -23,6 +23,7 @@ from mqtt.formats import MQTTV5
 
 from .Brokers import Brokers
 
+logging.Formatter.converter=time.gmtime
 logger = logging.getLogger('MQTT broker')
 
 mybroker = None
@@ -533,7 +534,7 @@ class MQTTBrokers:
       #self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True) #sangeeth  
       #self.disconnectAll()
       resp.reasonCode.set("Success")
-      logger.info("[MQTT5-san-9.2] Communication Continues")
+      logger.info("[MQTT5-san-9.2] COMMUNICATION ACCPTED. Communication Continues...")
       #self.disconnectAll()
       #return    
     else: 
