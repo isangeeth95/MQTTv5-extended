@@ -389,7 +389,6 @@ class Properties(object):
         self.clear()
         # deserialize properties into attributes from buffer received from network
         propslen, VBIlen = VariableByteIntegers.decode(buffer)
-        print(propslen, VBIlen)
         buffer = buffer[VBIlen:]  # strip the bytes used by the VBI
         propslenleft = propslen
         while propslenleft > 0:  # properties length is 0 if there are none

@@ -38,6 +38,10 @@ import select
 import socket
 from binascii import unhexlify
 
+logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
+logging.Formatter.converter=time.gmtime
+logger = logging.getLogger('__name__')
+
 ssl = None
 try:
     import ssl
@@ -1115,7 +1119,6 @@ class Client(object):
         self._bind_port = bind_port
         self._clean_start = clean_start
         self._connect_properties = properties
-        print("san - ",self._connect_properties)
         self._state = mqtt_cs_connect_async
         
 
@@ -1362,27 +1365,10 @@ class Client(object):
             rc = self.san_loop_read(max_packets)
             """SANGEETH"""
             if rc == 1 :
-                print("going here")
+                logger.info("[MQTT5-san-8.0] Inside san_loop if rc==1")        
                 return 1
-            print("san - rc in loop : ", rc)
             if rc or self._sock is None:
                 return rc
-
-        """if self._sockpairR in socklist[0]:
-            # Stimulate output write even though we didn't ask for it, because
-            # at that point the publish or other command wasn't present.
-            socklist[1].insert(0, self._sock)
-            # Clear sockpairR - only ever a single byte written.
-            try:
-                self._sockpairR.recv(1)
-            except socket.error as err:
-                if err.errno != EAGAIN:
-                    raise
-
-        if self._sock in socklist[1]:
-            rc = self.loop_write(max_packets)
-            if rc or self._sock is None:
-                return rc"""
 
         return self.loop_misc()
 
@@ -1432,7 +1418,6 @@ class Client(object):
                 raise ValueError('Invalid topic.')
 
         topic = topic.encode('utf-8')
-        print(1234)
 
         if self._topic_wildcard_len_check(topic) != MQTT_ERR_SUCCESS:
             print("pub2")
@@ -1443,39 +1428,31 @@ class Client(object):
             raise ValueError('Invalid QoS level.')
 
         if isinstance(payload, unicode):
-            print("4")
             local_payload = payload.encode('utf-8')
         elif isinstance(payload, (bytes, bytearray)):
-            print("5")
             local_payload = payload
         elif isinstance(payload, (int, float)):
-            print("6")
             local_payload = str(payload).encode('ascii')
         elif payload is None:
-            print("7")
             local_payload = b''
         else:
             raise TypeError(
                 'payload must be a string, bytearray, int, float or None.')
 
         if len(local_payload) > 268435455:
-            print("8")
             raise ValueError('Payload too large.')
 
         local_mid = self._mid_generate()
         print(56)
 
         if qos == 0:
-            print(87)
             info = MQTTMessageInfo(local_mid)
             rc = self._send_publish(
                 local_mid, topic, local_payload, qos, retain, False, info, properties)
             info.rc = rc
-            print(89)
             return info
         else:
             message = MQTTMessage(local_mid, topic)
-            print("010")
             message.timestamp = time_func()
             message.payload = local_payload
             message.qos = qos
@@ -1875,12 +1852,9 @@ class Client(object):
             rc = self.san_packet_read()
             """SANGEETH"""
             if rc ==1:
-                print("here i am")
+                logger.info("[MQTT5-san-7.0] Inside san_loop_read if rc==1")        
                 return 1
-            """if rc > 0:
-                return self._loop_rc_handle(rc)
-            elif rc == MQTT_ERR_AGAIN:
-                return MQTT_ERR_SUCCESS"""
+                
         return MQTT_ERR_SUCCESS
 
     def loop_write(self, max_packets=1):
@@ -1906,16 +1880,16 @@ class Client(object):
                 if rc > 0:
                     return self._loop_rc_handle(rc)
                 elif rc == MQTT_ERR_AGAIN:
-                    print("tre")
+                    logger.info("[MQTT5-san-2.0] Inside loop_write(), elif rc == MQTT_ERR_AGAIN:")
                     return MQTT_ERR_SUCCESS
-            print("trewq")
+            logger.info("[MQTT5-san-2.1] Inside loop_write()")
             return MQTT_ERR_SUCCESS
         finally:
             if self.want_write():
-                print("eerr")
+                logger.info("[MQTT5-san-2.2 if self.want_write()")
                 self._call_socket_register_write()
             else:
-                print("ewqas")
+                logger.info("[MQTT5-san-2.3] Else run")
                 self._call_socket_unregister_write()
                 #time.sleep(5)
 
@@ -2653,27 +2627,25 @@ class Client(object):
         # fail due to longer length, so save current data and current position.
         # After all data is read, send to _mqtt_handle_packet() to deal with.
         # Finally, free the memory and reset everything to starting conditions.
-        print(" 1 : ", self._in_packet)
+        logger.info("[MQTT5-san-3.0] Inside _packet_read()")
         if self._in_packet['command'] == 0:
-            print("2")
+            logger.info("[MQTT5-san-3.1] If self._in_packet['command'] == 0")
             try:
-                print("3")
                 command = self._sock_recv(1)
-                print("san - 1 command in packet_read : ", command)
             except WouldBlockError:
-                print("4")
+                logger.info("[MQTT5-san-3.2] except WouldBlockError")
                 return MQTT_ERR_AGAIN
             except socket.error as err:
-                print("5")
+                logger.info("[MQTT5-san-3.3] except socket.error as err")
                 self._easy_log(
                     MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                 return 1
             else:
-                print("5")
+                logger.info("[MQTT5-san-3.4] Else run")
                 if len(command) == 0:
                     return 1
                 command, = struct.unpack("!B", command)
-                print("san - 2 command in packet_read : ", command)                
+                logger.info("[MQTT5-san-3.5] Command in packet_read : %s",command)            
                 self._in_packet['command'] = command
 
         if self._in_packet['have_remaining'] == 0:
@@ -2702,13 +2674,12 @@ class Client(object):
                     self._in_packet['remaining_length'] += (
                         byte & 127) * self._in_packet['remaining_mult']
                     self._in_packet['remaining_mult'] = self._in_packet['remaining_mult'] * 128
-                    print("sangeeth error protocol")                       
+                    logger.info("[MQTT5-san-3.6] Else in while True")                     
 
                 if (byte & 128) == 0:
                     break
 
             self._in_packet['have_remaining'] = 1
-            print("sangeeth 2",self._in_packet['remaining_length'])
             self._in_packet['to_process'] = self._in_packet['remaining_length']        
 
         while self._in_packet['to_process'] > 0:
@@ -2725,10 +2696,9 @@ class Client(object):
                     return 1
                 self._in_packet['to_process'] -= len(data)
                 self._in_packet['packet'] += data
-                print("sangeeth 4 : ", self._in_packet['packet'])
+                logger.info("[MQTT5-san-3.7] Inside while self._in_packet['packet']: %s",self._in_packet['packet'])
 
         # All data for this packet is read.
-        print("KBSDKSD")
         self._in_packet['pos'] = 0
         rc = self._packet_handle()
 
@@ -2761,27 +2731,25 @@ class Client(object):
         # fail due to longer length, so save current data and current position.
         # After all data is read, send to _mqtt_handle_packet() to deal with.
         # Finally, free the memory and reset everything to starting conditions.
-        print(" 1 : ", self._in_packet)
+        logger.info("[MQTT5-san-4.0] Inside san_packet_read()")
         if self._in_packet['command'] == 0:
-            print("2")
+            logger.info("[MQTT5-san-4.1] If self._in_packet['command'] == 0")
             try:
-                print("3")
                 command = self._sock_recv(1)
-                print("san - 1 command in packet_read : ", command)
             except WouldBlockError:
-                print("4")
+                plogger.info("[MQTT5-san-4.2] except WouldBlockError")
                 return MQTT_ERR_AGAIN
             except socket.error as err:
-                print("5")
+                logger.info("[MQTT5-san-4.3] except socket.error as err")
                 self._easy_log(
                     MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                 return 1
             else:
-                print("6")
+                logger.info("[MQTT5-san-4.4] Else run")
                 if len(command) == 0:
                     return 1
                 command, = struct.unpack("!B", command)
-                print("san - 2 command in packet_read : ", command)                
+                logger.info("[MQTT5-san-4.5] Command in packet_read : %s",command)                
                 self._in_packet['command'] = command
 
         if self._in_packet['have_remaining'] == 0:
@@ -2789,7 +2757,6 @@ class Client(object):
             # Algorithm for decoding taken from pseudo code at
             # http://publib.boulder.ibm.com/infocenter/wmbhelp/v6r0m0/topic/com.ibm.etools.mft.doc/ac10870_.htm
             while True:
-                print("ashvkas")
                 try:
                     byte = self._sock_recv(1)
                 except WouldBlockError:
@@ -2811,19 +2778,17 @@ class Client(object):
                     self._in_packet['remaining_length'] += (
                         byte & 127) * self._in_packet['remaining_mult']
                     self._in_packet['remaining_mult'] = self._in_packet['remaining_mult'] * 128
-                    print("sangeeth error protocol")                       
+                    logger.info("[MQTT5-san-4.6] Else in while True")
 
                 if (byte & 128) == 0:
                     break
 
             self._in_packet['have_remaining'] = 1
-            print("sangeeth 2",self._in_packet['remaining_length'])
             self._in_packet['to_process'] = self._in_packet['remaining_length']        
 
         while self._in_packet['to_process'] > 0:
             try:
                 data = self._sock_recv(self._in_packet['to_process'])
-                print("sangeeth 3 : ", data)
             except WouldBlockError:
                 return MQTT_ERR_AGAIN
             except socket.error as err:
@@ -2835,7 +2800,7 @@ class Client(object):
                     return 1
                 self._in_packet['to_process'] -= len(data)
                 self._in_packet['packet'] += data
-                print("sangeeth 4 : ", self._in_packet['packet'])
+                logger.info("[MQTT5-san-4.7] Inside while self._in_packet['packet']: %s",self._in_packet['packet'])
 
         # All data for this packet is read.
         self._in_packet['pos'] = 0
@@ -3021,14 +2986,14 @@ class Client(object):
                 return packet
 
     def _pack_str16(self, packet, data):
-        print("san - inside _pack_str16 function - data variable : ", data)
+        logger.info("[MQTT5-san-0] Inside _pack_str16 function - data variable: %s",data)
         if isinstance(data, unicode):
             data = data.encode('utf-8')
-            print("san - data = data.encode('utf-8') : ", data)           
+            logger.info("[MQTT5-san-0.1] data.encode('utf-8') : %s", data) 
         packet.extend(struct.pack("!H", len(data)))
         packet.extend(data)
         #sangeeth
-        print("len(data) , data : ", len(data), data)
+        logger.info("[MQTT5-san-0.2] len(data)=%s, data=%s", len(data), data) 
 
     def _send_publish(self, mid, topic, payload=b'', qos=0, retain=False, dup=False, info=None, properties=None):
         # we assume that topic and payload are already properly encoded
@@ -3762,7 +3727,7 @@ class Client(object):
         self._messages_reconnect_reset_in()
 
     def _packet_queue(self, command, packet, mid, qos, info=None):
-        print("Q1")
+        logger.info("[MQTT5-san-1.0] Inside _packet_queue function")
         mpkt = {
             'command': command,
             'mid': mid,
@@ -3773,35 +3738,35 @@ class Client(object):
             'info': info}
 
         with self._out_packet_mutex:
-            print("Q2")
+            logger.info("[MQTT5-san-1.1] self._out_packet_mutex")
             self._out_packet.append(mpkt)
             if self._current_out_packet_mutex.acquire(False):
-                print("Q3")
+                logger.info("[MQTT5-san-1.2] If self._current_out_packet_mutex.acquire(False)")
                 if self._current_out_packet is None and len(self._out_packet) > 0:
-                    print("Q4")
+                    logger.info("[MQTT5-san-1.3] If self._current_out_packet is None and len(self._out_packet) > 0")
                     self._current_out_packet = self._out_packet.popleft()
                 self._current_out_packet_mutex.release()
 
         # Write a single byte to sockpairW (connected to sockpairR) to break
         # out of select() if in threaded mode.
         try:
-            print("Q5")
+            logger.info("[MQTT5-san-1.4] sockpair_data: %s",sockpair_data)
             self._sockpairW.send(sockpair_data)
         except socket.error as err:
-            print("Q6")
+            logger.info("[MQTT5-san-1.5] except socket.error as err")
             if err.errno != EAGAIN:
-                print("Q7")
+                logger.info("[MQTT5-san-1.6] If err.errno != EAGAIN")
                 raise
 
         if self._thread is None:
-            print("Q8")
+            logger.info("[MQTT5-san-1.7] If self._thread is None")
             if self._in_callback_mutex.acquire(False):
-                print("Q9")
+                logger.info("[MQTT5-san-1.8] If self._in_callback_mutex.acquire(False)")
                 self._in_callback_mutex.release()
                 return self.loop_write()
         
         self._call_socket_register_write()
-        print("Q10")
+        logger.info("[MQTT5-san-1.9] After self._call_socket_register_write()")
         return MQTT_ERR_SUCCESS
 
 
@@ -3849,14 +3814,13 @@ class Client(object):
 
 
     def _packet_handle(self):
-        print("sangeeth 5 : ", self._in_packet)
-        
+        logger.info("[MQTT5-san-5.0] Packet inside _packet_handle(): %s",self._in_packet)        
 #        f = self._in_packet['command'] +  self._in_packet['remaining_length'] +  
         if(self._in_packet['command'] >> 4 & 0x01) and (self._in_packet['command'] & 0x0F != 0):
     	    cmd = self._in_packet['command']
         else:
             cmd = self._in_packet['command'] & 0xF0
-        print("san - cmd : ", cmd)
+        logger.info("[MQTT5-san-5.1] Command in _packet_handle(): %s",cmd)            
         "introducing NTPREP packet handling"
         if cmd == PINGREQ:
             return self._handle_pingreq()
@@ -3884,7 +3848,6 @@ class Client(object):
         elif cmd == AUTH and self._protocol == MQTTv5:
             return self._handle_auth()
         elif cmd == NTPREP:
-            print("san - cmd == NTPREP")
             self._handle_ntprep()
             return 1
         else:
@@ -3910,10 +3873,10 @@ class Client(object):
         
         "san - handling ntpreply NTPREP"
     def _handle_ntprep(self):
-        print("san - inside _handle_ntprep ")
+        logger.info("[MQTT5-san-6.0] Handling NTPREP")        
         pack_format = "!H" + str(len(self._in_packet['packet']) - 2) + 's'
         (slen, packet) = struct.unpack(pack_format, self._in_packet['packet'])
-        print("san - packet", bytearray(packet))        
+        logger.info("[MQTT5-san-6.1] Recieved NTPREP packet: %s",bytearray(packet))            
 
         if self._protocol == MQTTv5:
             if self._in_packet['remaining_length'] < 2:
@@ -3928,18 +3891,13 @@ class Client(object):
             properties = Properties(CONNACK >> 4)
             byte = self._in_packet['packet'][2:]
             curlen = properties.unpack(byte)
-            print("reason : curlen = ", reason, curlen)
             curlen = curlen[1]
-            #byte = byte[curlen:] 
-            #print(curlen)
             remaining_datalen = int.from_bytes(byte[curlen:curlen+2], "big")
             curlen += 2
-            print(curlen, remaining_datalen)
             remaining_data = byte[curlen:curlen+(remaining_datalen-1)].decode('utf-8')
             timercv = remaining_data
-            #os.system('date -s @',timercv)
-            os.system('date -s @%s' %timercv)
-            print(timercv)
+            os.system('date -s @%s' %timercv)#command execution
+            logger.info("[MQTT5-san-6.2] Extracted time from recieved packet: %s",timercv)        
                
         else:
             (flags, result) = struct.unpack("!BB", self._in_packet['packet'])
@@ -3999,8 +3957,6 @@ class Client(object):
             properties = Properties(CONNACK >> 4)
             properties.unpack(self._in_packet['packet'][2:])
             curlen = properties.unpack(self._in_packet['packet'][2:]) #san
-            print("reason : properties = ", reason, properties) #san
-            print(curlen) #san
         else:
             (flags, result) = struct.unpack("!BB", self._in_packet['packet'])
         if self._protocol == MQTTv311:
