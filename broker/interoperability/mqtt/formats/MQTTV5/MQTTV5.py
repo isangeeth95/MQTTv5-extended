@@ -1789,10 +1789,8 @@ class NTPReqs(Packets):
 
       self.KeepAliveTimer = readInt16(buffer[curlen:]) #curlen = 10, control header byte 9
       curlen += 2 #curlen = 12
-      print("12 curlen : ",curlen)
 
       curlen += self.properties.unpack(buffer[curlen:])[1]
-      print("curlen - self.properties.unpack(buffer[curlen:])[1] : ", curlen)
       logger.info("[MQTT5-3.1.3-3] Clientid must be present, and first field")
       logger.info("[MQTT5-3.1.3-4] Clientid must be a UTF-8 encoded string")
       self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
