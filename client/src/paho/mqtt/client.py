@@ -3966,6 +3966,7 @@ class Client(object):
             (flags, result) = struct.unpack(
                 "!BB", self._in_packet['packet'][:2])
             reason = ReasonCodes(CONNACK >> 4, identifier=result)
+            logger.info("[MQTT5-san-9.0] Reasoncode: %s", reason)        
             properties = Properties(CONNACK >> 4)
             properties.unpack(self._in_packet['packet'][2:])
             curlen = properties.unpack(self._in_packet['packet'][2:]) #san
