@@ -89,7 +89,7 @@ def PacketType(byte):
   """
     Retrieve the message type from the first byte of the fixed header.
   """
-  print("san----- Extracting the fixed header to detetct the packetType")
+  logger.info("[MQTT5-san-3.0] Extracting the fixed header to detetct the packetType")
   if byte != None:
     rc = byte[0] >> 4
     if (rc & 0x01 == 1) and (byte[0] & 0x0F != 0) :
@@ -97,7 +97,7 @@ def PacketType(byte):
     
   else:
     rc = None    
-  print("san----- packetType: ",rc)
+  logger.info("[MQTT5-san-3.1] PacketType: %s", rc)
   return rc
 
 class ReasonCodes:
@@ -345,10 +345,9 @@ class FixedHeaders(object):
     "return printable representation of our data"
     #if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
      # self.PacketType = self.PacketType + 1
-    if(self.PacketType == 0x12): 
-      print("fuck : ", self.PacketType)  
+    if(self.PacketType == 0x12):  
       self.PacketType=self.PacketType-1  
-    print("san __str__ self.PacketType : ", self.PacketType)
+    logger.info("[MQTT5-san-5.0] __str__ self.PacketType : %s", self.PacketType)
     return Packets.classNames[self.PacketType]+'(fh.DUP='+str(self.DUP)+ \
            ", fh.QoS="+str(self.QoS)+", fh.RETAIN="+str(self.RETAIN)
            #+ \
@@ -363,11 +362,7 @@ class FixedHeaders(object):
       }
 
   def pack(self, length):
-    print("nethmi 0 : ", length)
-    print("PacketType : ", self.PacketType)
-    print("DUP : ", self.DUP)
-    print("QoS : ", self.QoS)
-    print("RETAIN : ", self.RETAIN)
+    logger.info("[MQTT5-san-7.1] {PacketType: %s} {DUP: %s} {QoS: %s} {RETAIN: %s}",self.PacketType, self.DUP, self.QoS, self.RETAIN)
     "pack data into string buffer ready for transmission down socket"
     if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
       self.PacketType = self.PacketType + 1
@@ -377,15 +372,15 @@ class FixedHeaders(object):
       buffer = bytes([(self.PacketType << 4) | (self.DUP << 3) |\
                          (self.QoS << 1) | self.RETAIN])
     self.remainingLength = length
-    print("nethmi 1 : ", buffer)
+    logger.info("[MQTT5-san-7.2] Fixed header: %s", buffer)
     buffer += VBIs.encode(length)
-    print("nethmi 2 : ", buffer)
+    logger.info("[MQTT5-san-7.2] Fixed header and msglen: %s", buffer)
     return buffer
 #===============sangeeth========================
   def unpack(self, buffer, maximumPacketSize):
     "unpack data from string buffer into separate fields"
     b0 = buffer[0]
-    print("san - printing buffer array fist 3 indexes : " ,buffer[0], buffer[1])
+    logger.info("[MQTT5-san-7.0] First two indexes in the buffer array: %s %s" ,buffer[0], buffer[1])
     self.PacketType = b0 >> 4
     #self.DUP = ((b0 >> 3) & 0x01) == 1
     #self.QoS = (b0 >> 1) & 0x03
@@ -404,7 +399,6 @@ class FixedHeaders(object):
       self.RETAIN = (b0 & 0x01) == 1
     
     (self.remainingLength, bytes) = VBIs.decode(buffer[1:])
-    print("san - self.remainingLength + bytes + 1 : ", self.remainingLength + bytes + 1)
     if self.remainingLength + bytes + 1 > maximumPacketSize:
        raise ProtocolError("Packet too large")
     return bytes + 1 # length of fixed header
@@ -449,8 +443,7 @@ def readUTF(buffer, maxlen):
     if zz != -1:
       raise MalformedPacket("[MQTT5-1.5.4-1] D800-DFFF found in UTF data "+buf)
   if buf.find("\uFEFF") != -1:
-    logger.info("[MQTT5-1.5.4-3] U+FEFF in UTF string")
-  print("san - buf, length+2 : ", buf, length+2)  
+    logger.info("[MQTT5-1.5.4-3] U+FEFF in UTF string")  
   return buf, length+2
 
 def writeBytes(buffer):
@@ -718,7 +711,7 @@ class Connects(Packets):
           "usernameFlag", "passwordFlag", "username", "password", "timercv",
           "timesys", "lentimercv", "lentimesys"])
 
-    print("san - Connects class init function")#sangeeth
+    logger.info("[MQTT5-san-4.0] Connects class init process")
     self.fh = FixedHeaders(PacketTypes.CONNECT)
 
     # variable header
@@ -766,15 +759,13 @@ class Connects(Packets):
     return buffer
 #================sangeeth=======================
   def unpack(self, buffer, maximumPacketSize):
-    print("san - inside unpack in MQTTV5 in Connects class")  
+    logger.info("[MQTT5-san-6.0] Inside unpack in MQTTV5 in Connects class")  
     assert len(buffer) >= 2
     assert PacketType(buffer) == PacketTypes.CONNECT
-    print("san - len(buffer) : ",len(buffer))
 
     try:
       fhlen = self.fh.unpack(buffer, maximumPacketSize)#unpack in line 353
       packlen = fhlen + self.fh.remainingLength
-      print("san - fhlan and packlen : ", fhlen, packlen)
       assert len(buffer) >= packlen, "buffer length %d packet length %d" % (len(buffer), packlen)
       curlen = fhlen # points to after header + remaining length
       assert self.fh.DUP == False, "[MQTT5-2.1.3-1]"
@@ -785,7 +776,6 @@ class Connects(Packets):
       # the following two assertions will need to be disabled
       self.ProtocolName, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       curlen += valuelen
-      print("valuelen ", valuelen)
       assert self.ProtocolName == "MQTT", "[MQTT5-3.1.2-1-error] Wrong protocol name %s" % self.ProtocolName
       logger.info("[MQTT5-3.1.2-1] Protocol name must be MQTT")
 
@@ -812,20 +802,16 @@ class Connects(Packets):
 
       self.KeepAliveTimer = readInt16(buffer[curlen:]) #curlen = 10, control header byte 9
       curlen += 2 #curlen = 12
-      print("12 curlen : ",curlen)
 
       curlen += self.properties.unpack(buffer[curlen:])[1]
-      print("curlen - self.properties.unpack(buffer[curlen:])[1] : ", curlen)
       logger.info("[MQTT5-3.1.3-3] Clientid must be present, and first field")
       logger.info("[MQTT5-3.1.3-4] Clientid must be a UTF-8 encoded string")
       self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
-      curlen += valuelen
-      print("curlen client identifier : ",curlen)     
+      curlen += valuelen    
       self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       self.timesys = os.popen('date +%s').read()
-      print(valuelen,"  ",self.timercv)
+      logger.info("[MQTT5-san-6.1] Recieved value length is %s and recieved data is %s",valuelen,self.timercv )
       curlen += valuelen
-      print("curlen remaining data: ",curlen)
 
       if self.WillFlag:
         curlen += self.WillProperties.unpack(buffer[curlen:])[1]
@@ -859,8 +845,6 @@ class Connects(Packets):
       if self.WillFlag and self.usernameFlag and self.passwordFlag:
         logger.info("[MQTT5-3.1.3-1] clientid, will topic, will message, username and password all present")
 
-      print("curlen ",curlen)
-      print("packlen ",packlen)
       assert curlen == packlen, "Packet is wrong length curlen %d != packlen %d" % (curlen, packlen)
     except:
       traceback.print_exc()
@@ -872,14 +856,14 @@ class Connects(Packets):
     #self.timesys = str(self.timesys)
     self.lentimercv = len(str(self.timercv))
     self.lentimesys = len(str(self.timesys))
-    print(self.timercv," ", self.timesys," ",self.lentimercv,"  ",self.lentimesys,\
-          " ",self.timercv[0:self.lentimercv-1]," ",self.timesys[0:self.lentimesys-1])
-    print(int(self.timesys[0:self.lentimesys-1]) - int(self.timercv[0:self.lentimercv-1]))
-    if (self.lentimercv == self.lentimesys) and (int(self.timesys[0:self.lentimesys-1]) - int(self.timercv[0:self.lentimercv-1]) <= 5):
-      print("isInSameTimeZone : YES")
+    self.timercv = self.timercv[0:self.lentimercv-1]
+    self.timesys = self.timesys[0:self.lentimesys-1]
+    logger.info("[MQTT5-san-0] Compare epochs %s and %s",self.timercv,self.timesys)
+    if (self.lentimercv == self.lentimesys) and (int(self.timesys) - int(self.timercv) <= 5):
+      logger.info("[MQTT5-san-0.1] Client and server reside within the same time frame")
       return True
     else:
-      print("isInSameTimeZone : NO")
+      logger.info("[MQTT5-san-0.2] Client and server should reside within the same time frame")  
       return False
   
   def __str__(self):
@@ -949,7 +933,7 @@ class Connacks(Packets):
   def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False, ReasonCode="Success"):
     object.__setattr__(self, "names",
          ["fh", "sessionPresent", "reasonCode", "properties"])
-    print("san Connacks - inside connecks init function")
+    logger.info("[MQTT5-san-10.0] Inside Connacks init function in MQTTV5.py")
     self.fh = FixedHeaders(PacketTypes.CONNACK)
     self.fh.DUP = DUP
     self.fh.QoS = QoS
@@ -961,14 +945,14 @@ class Connacks(Packets):
       self.unpack(buffer)
 
   def pack(self):
-    print("san Connacks - inside connecks pack function")  
+    logger.info("[MQTT5-san-10.1] Pack the Connack packet")
     flags = 0x01 if self.sessionPresent else 0x00
     logger.info("[MQTT5-3.2.2-1] bits 7-1 of the connack flags are reserved and must be set to 0")
     buffer = bytes([flags])
     buffer += self.reasonCode.pack()
     buffer += self.properties.pack()
     buffer = self.fh.pack(len(buffer)) + buffer
-    print("san Connacks - buffer : ", buffer)
+    logger.info("[MQTT5-san-10.2] Connacks packet buffer: %s", buffer)
     return buffer
 
   def unpack(self, buffer, maximumPacketSize):
@@ -1714,7 +1698,7 @@ class NTPReqs(Packets):
           "WillFlag", "WillQoS", "WillRETAIN", "WillTopic", "WillMessage",
           "usernameFlag", "passwordFlag", "username", "password"])
 
-    print("san - NTPReqs class init function")#sangeeth
+    logger.info("[MQTT5-san-12.0] Inside NTPReqs init process")
     self.fh = FixedHeaders(PacketTypes.NTPREQ)
 
     # variable header
@@ -1762,15 +1746,13 @@ class NTPReqs(Packets):
     return buffer
 #================sangeeth=======================
   def unpack(self, buffer, maximumPacketSize):
-    print("san - inside unpack in MQTTV5 in NTPReqs class")  
+    logger.info("[MQTT5-san-12.1] Inside unpack in MQTTV5 inside NTPReqs class")
     assert len(buffer) >= 2
     assert PacketType(buffer) == PacketTypes.NTPREQ
-    print("san - len(buffer) : ",len(buffer))
 
     try:
       fhlen = self.fh.unpack(buffer, maximumPacketSize)#unpack in line 353
       packlen = fhlen + self.fh.remainingLength
-      print("san - fhlan and packlen : ", fhlen, packlen)
       assert len(buffer) >= packlen, "buffer length %d packet length %d" % (len(buffer), packlen)
       curlen = fhlen # points to after header + remaining length
       assert self.fh.DUP == False, "[MQTT5-2.1.3-1]"
@@ -1781,7 +1763,6 @@ class NTPReqs(Packets):
       # the following two assertions will need to be disabled
       self.ProtocolName, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       curlen += valuelen
-      print("valuelen ", valuelen)
       assert self.ProtocolName == "MQTT", "[MQTT5-3.1.2-1-error] Wrong protocol name %s" % self.ProtocolName
       logger.info("[MQTT5-3.1.2-1] Protocol name must be MQTT")
 
@@ -1816,12 +1797,6 @@ class NTPReqs(Packets):
       logger.info("[MQTT5-3.1.3-4] Clientid must be a UTF-8 encoded string")
       self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       curlen += valuelen
-      print("curlen client identifier : ",curlen)
-      #self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
-      #self.timesys = os.popen('date +%s').read()
-      #print(valuelen,"  ",self.timercv)
-      #curlen += valuelen
-      print("curlen remaining data: ",curlen)
 
       if self.WillFlag:
         curlen += self.WillProperties.unpack(buffer[curlen:])[1]
@@ -1855,8 +1830,6 @@ class NTPReqs(Packets):
       if self.WillFlag and self.usernameFlag and self.passwordFlag:
         logger.info("[MQTT5-3.1.3-1] clientid, will topic, will message, username and password all present")
 
-      print("curlen ",curlen)
-      print("packlen ",packlen)
       assert curlen == packlen, "Packet is wrong length curlen %d != packlen %d" % (curlen, packlen)
     except:
       traceback.print_exc()
@@ -1930,8 +1903,7 @@ class NTPReps(Packets):
   def __init__(self, buffer=None, srvtime=0, DUP=False, QoS=0, RETAIN=False, ReasonCode="Success"):
     object.__setattr__(self, "names",
          ["fh", "sessionPresent", "reasonCode", "properties", "srvtime"])
-    print("san NTPReps - inside NTPReps init function")
-    print("fuck 2 : ", PacketTypes.NTPREP)
+    logger.info("[MQTT5-san-14.0] Inside NTPReps init function in MQTTV5.py")
     self.fh = FixedHeaders(PacketTypes.NTPREP)
     self.fh.DUP = DUP
     self.fh.QoS = QoS
@@ -1944,7 +1916,7 @@ class NTPReps(Packets):
       self.unpack(buffer)
 
   def pack(self):
-    print("san NTPReps - inside NTPReps pack function")  
+    logger.info("[MQTT5-san-14.1] Packing NTPReps packet")
     flags = 0x01 if self.sessionPresent else 0x00
     logger.info("[MQTT5-3.2.2-1] bits 7-1 of the connack flags are reserved and must be set to 0")
     buffer = bytes([flags])
@@ -1952,9 +1924,8 @@ class NTPReps(Packets):
     buffer += self.properties.pack()
     self.srvtime = os.popen('date +%s').read()
     buffer += writeUTF(str(self.srvtime))
-    print("san NTPReps - self.fh : ", self.fh)
     buffer = self.fh.pack(len(buffer)) + buffer
-    print("san NTPReps - buffer : ", buffer)
+    logger.info("[MQTT5-san-14.2] Packied NTPReps packet buffer: %s", buffer)
     return buffer
 
   def unpack(self, buffer, maximumPacketSize):
@@ -1994,12 +1965,11 @@ classes = [Connects, Connacks, Publishes, Pubacks, Pubrecs,
            Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs, NTPReps]
 #==============sangeeth============================
 def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
-  print("san-inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")
-  print("san-buffer- ",buffer)  
+  logger.info("[MQTT5-san-2.0] Inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")
+  logger.info("[MQTT5-san-2.1] Recieved Buffer: %s",buffer)
   if PacketType(buffer) != None:
-    print("san-PacketType(buffer): ", PacketType(buffer))  
     packet = classes[PacketType(buffer)-1]()
-    print("san-Packet: ", packet)
+    logger.info("[MQTT5-san-2.2] Detected Packet: %s",packet)
     packet.unpack(buffer, maximumPacketSize=maximumPacketSize)
   else:
     packet = None

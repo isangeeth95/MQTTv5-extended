@@ -49,9 +49,9 @@ def respond(sock, packet, maximumPacketSize=500):
     logger.info("[MQTT5-3.1.2-25] message must be discarded and behave as if it had been sent")
     return
   if hasattr(sock, "fileno"):
-    print("san - hasattr condition in respond function in MQTTBRokers.py")  
+    logger.info("[MQTT5-san-10.0] Hasattr condition TRUE inside respond function in MQTTBRokers.py")
     packet_string = str(packet)
-    print(" san - packet_string : ",packet_string)
+    logger.info("[MQTT5-san-10.1] Respond packet_string: %s",packet_string)
     if len(packet_string) > 256:
       packet_string = packet_string[:255] + '...' + (' payload length:' + str(len(packet.data)) if hasattr(packet, "data") else "")
     logger.debug("out: (%d) %s", sock.fileno(), packet_string)
@@ -333,15 +333,15 @@ class MQTTBrokers:
     self.broker.reinitialize()
 #=================sangeeth===========================
   def handleRequest(self, sock):
-    print("san-inside handle request in brokers/v5/MQTTBrokers.py")
-    print("san- initial sock: ",sock)
+    logger.info("[MQTT5-san-1.0] Inside handle request in brokers/v5/MQTTBrokers.py")  
+    logger.info("[MQTT5-san-1.1] Initial sock: %s",sock)  
     "this is going to be called from multiple threads, so synchronize"
     self.lock.acquire()
     raw_packet = None
     try:
       try:
         raw_packet = MQTTV5.getPacket(sock)
-        print("san-raw packet", raw_packet)
+        logger.info("[MQTT5-san-1.2] Raw packet: %s",raw_packet)  
       except:
         pass # handled by raw_packet == None
       if raw_packet == None:
@@ -352,9 +352,10 @@ class MQTTBrokers:
         terminate = True
       else:
         try:
-          print("san-Before unpackPacket")  
+          logger.info("[MQTT5-san-1.3] Before unpack the raw packet")  
           packet = MQTTV5.unpackPacket(raw_packet, self.options["maximumPacketSize"])
-          print("san-After unpackPacket : ", packet)
+          logger.info("[MQTT5-san-1.4] After unpack the raw packet")  
+          logger.info("[MQTT5-san-1.5] Unpacked raw packet : %s",packet)  
           if self.options["visual"]:
             clientid = self.clients[sock].id if sock in self.clients.keys() else ""
             if clientid == "" and hasattr(packet, "ClientIdentifier"):
@@ -368,8 +369,8 @@ class MQTTBrokers:
             except:
               traceback.print_exc()
           if packet:
+            logger.info("[MQTT5-san-1.6] Recieved packet: %s socket: %s",packet,sock)
             terminate = self.handlePacket(packet, sock)
-            print("san - packet and socket : ", packet," : ", sock)
           else:
             self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True)
             terminate = True
@@ -390,10 +391,10 @@ class MQTTBrokers:
     return terminate
 #====================sangeeth==============================
   def handlePacket(self, packet, sock):
-    print("**********san - inside handlePacket in MQTTBrokers.py*********")  
+    logger.info("[MQTT5-san-8.0] Inside handlePacket in MQTTBrokers.py")
     terminate = False
     if hasattr(sock, "fileno"):
-      print("**********san - 1st if inside handlePacket in MQTTBrokers.py*********")  
+      logger.info("[MQTT5-san-8.1] Inside 1st if of handlePacket in MQTTBrokers.py")
       packet_string = str(packet)
       if len(packet_string) > 256:
         packet_string = packet_string[0:256] + '...' + (' payload length:' + str(len(packet.data)) if hasattr(packet, "data") else "")
@@ -408,21 +409,21 @@ class MQTTBrokers:
       raise MQTTV5.MQTTException("[MQTT5-3.1.0-1-error] Connect was not first packet on socket")
     else:
       if packet.fh.PacketType == MQTTV5.PacketTypes.CONNECT:
-        print("**********san - 1st if in else of 3rd if inside handlePacket in MQTTBrokers.py*********")   
+        logger.info("[MQTT5-san-8.2] 1st if inside else of 3rd if inside handlePacket in MQTTBrokers.py")
         logger.info("[MQTT5-3.1.0-1] Connect must be first packet on socket")
       getattr(self, MQTTV5.Packets.Names[packet.fh.PacketType].lower())(sock, packet)
       if sock in self.clients.keys():
-        print("**********san - 2nd if in else of 3rd if inside handlePacket in MQTTBrokers.py*********")  
+        logger.info("[MQTT5-san-8.3] 2nd if inside else of 3rd if inside handlePacket in MQTTBrokers.py")  
         self.clients[sock].lastPacket = time.monotonic()
     if packet.fh.PacketType == MQTTV5.PacketTypes.DISCONNECT:
-      print("**********san - 4th if inside handlePacket in MQTTBrokers.py*********")   
+      logger.info("[MQTT5-san-8.4] Inside last if condition inside handlePacket in MQTTBrokers.py")     
       terminate = True
     return terminate
 
   def connect(self, sock, packet):
-    print("san - inside connect function in MQTTBrokers.py") 
+    logger.info("[MQTT5-san-9.0] Inside connect function in MQTTBrokers.py")
     resp = MQTTV5.Connacks()
-    print("san - inside connect function in MQTTBrokers.py end : ", resp)
+    logger.info("[MQTT5-san-9.1] Respond recieved from Connacks init in MQTTV5.py. Respond is: %s", resp)
     if packet.ProtocolName != "MQTT":
       self.disconnect(sock, None)
       raise MQTTV5.MQTTException("[MQTT5-3.1.2-1-error] Wrong protocol name %s" % packet.ProtocolName)
@@ -532,10 +533,12 @@ class MQTTBrokers:
       #self.disconnect(sock, reasonCode="Malformed packet", sendWillMessage=True) #sangeeth  
       #self.disconnectAll()
       resp.reasonCode.set("Success")
+      logger.info("[MQTT5-san-9.2] Communication Continues")
       #self.disconnectAll()
       #return    
     else: 
       resp.reasonCode.set("Client and server not reside within the same time frame")
+      logger.info("[MQTT5-san-9.3] Communication Stops due to closing the sock ")
       sock.close()
       #self.disconnectAll()
     respond(sock, resp)
@@ -543,9 +546,9 @@ class MQTTBrokers:
 
   def disconnect(self, sock, packet=None, sendWillMessage=False, reasonCode=None, properties=None):
     logger.info("[MQTT-3.14.4-2] Client must not send any more packets after disconnect")
-    print("san - sock in disconnect() : ", sock)
+    logger.info("[MQTT5-san-11.0] Disconnect socket: %s",sock)
     me = self.clients[sock]
-    print("san - me in disconnect() : ", me)
+    logger.info("[MQTT5-san-11.1] disconnect(): %s",me)
     me.clearTopicAliases()
     # Session expiry
     if packet and hasattr(packet.properties, "SessionExpiryInterval"):
@@ -781,9 +784,9 @@ class MQTTBrokers:
         self.disconnect(sock, None, sendWillMessage=True)
 
   def ntpreq(self, sock, packet): #"Introducing ntpreq object to MQTT Brokers - SANGEETH"
-    print("san - inside ntpreq function in MQTTBrokers.py") 
+    logger.info("[MQTT5-san-13.0] Inside ntpreq function in MQTTBrokers.py")
     resp = MQTTV5.NTPReps()
-    print("san - inside ntpreq function in MQTTBrokers.py end : ", resp)
+    logger.info("[MQTT5-san-13.1] Respond recieved from NTPReps function: %s",resp)
     if packet.ProtocolName != "MQTT":
       self.disconnect(sock, None)
       raise MQTTV5.MQTTException("[MQTT5-3.1.2-1-error] Wrong protocol name %s" % packet.ProtocolName)
