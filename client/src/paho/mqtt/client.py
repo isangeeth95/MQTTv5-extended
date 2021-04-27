@@ -3876,7 +3876,7 @@ class Client(object):
         logger.info("[MQTT5-san-6.0] Handling NTPREP")        
         pack_format = "!H" + str(len(self._in_packet['packet']) - 2) + 's'
         (slen, packet) = struct.unpack(pack_format, self._in_packet['packet'])
-        logger.info("[MQTT5-san-6.1] Recieved NTPREP packet: %s",bytearray(packet))            
+        logger.info("[MQTT5-san-6.1] Received NTPREP packet: %s",bytearray(packet))            
 
         if self._protocol == MQTTv5:
             if self._in_packet['remaining_length'] < 2:
@@ -3897,7 +3897,7 @@ class Client(object):
             remaining_data = byte[curlen:curlen+(remaining_datalen-1)].decode('utf-8')
             timercv = remaining_data
             os.system('date -s @%s' %timercv)#command execution
-            logger.info("[MQTT5-san-6.2] Extracted time from recieved packet: %s",timercv)        
+            logger.info("[MQTT5-san-6.2] Extracted time from received packet: %s",timercv)        
                
         else:
             (flags, result) = struct.unpack("!BB", self._in_packet['packet'])
