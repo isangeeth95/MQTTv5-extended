@@ -48,13 +48,13 @@ MAX_PACKETID = 2**16-1
 
 class PacketTypes:
 
-  indexes = range(1, 18)
+  indexes = range(1, 20)
 
   # Packet types
   CONNECT, CONNACK, PUBLISH, PUBACK, PUBREC, PUBREL, \
   PUBCOMP, SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, \
-  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ, NTPREP = indexes
-
+  PINGREQ, PINGRESP, DISCONNECT, AUTH, NTPREQ, NTPREP, \
+  NULLPACK, AUTHACK = indexes
   # Dummy packet type for properties use - will delay only applies to will
   WILLMESSAGE = 99
 
@@ -64,7 +64,7 @@ class Packets(object):
   Names = [ "reserved", \
     "Connect", "Connack", "Publish", "Puback", "Pubrec", "Pubrel", \
     "Pubcomp", "Subscribe", "Suback", "Unsubscribe", "Unsuback", \
-    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq", "NTPrep"]
+    "Pingreq", "Pingresp", "Disconnect", "Auth", "NTPreq", "NTPrep", "Nullpack", "Authack"]
 
   classNames = [name+'es' if name == "Publish" else
                 name+'s' if name != "reserved" else name for name in Names]
@@ -346,7 +346,9 @@ class FixedHeaders(object):
     #if (self.PacketType >> 4 & 0x01 == 1) and (self.PacketType & 0x0F != 0) :
      # self.PacketType = self.PacketType + 1
     if(self.PacketType == 0x12):  
-      self.PacketType=self.PacketType-1  
+      self.PacketType=self.PacketType-1
+    if(self.PacketType == 0x14): 
+      self.PacketType = self.PacketType - 1
     logger.info("[MQTT5-san-5.0] __str__ self.PacketType : %s", self.PacketType)
     return Packets.classNames[self.PacketType]+'(fh.DUP='+str(self.DUP)+ \
            ", fh.QoS="+str(self.QoS)+", fh.RETAIN="+str(self.RETAIN)
@@ -1955,13 +1957,125 @@ class NTPReps(Packets):
     return data
 
   def __eq__(self, packet):
-    return Packets.__eq__(self, packet) and \
+    return Packets.__eq__(self, packet) and 
            self.reasonCode == packet.reasonCode
+    
+
+class Nullpacks(Packets):
+
+  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
+          reasonCode="Success"):
+    object.__setattr__(self, "names",
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+    self.fh = FixedHeaders(PacketTypes.NULLPACK)
+    self.fh.DUP = DUP
+    self.fh.QoS = QoS
+    self.fh.RETAIN = RETAIN
+    # variable header
+    self.reasonCode = ReasonCodes(PacketTypes.NULLPACK, reasonCode)
+    self.properties = Properties(PacketTypes.NULLPACK)
+    if buffer != None:
+      self.unpack(buffer)
+
+  def pack(self):
+    buffer = self.reasonCode.pack()
+    buffer += self.properties.pack()
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+
+  def unpack(self, buffer, maximumPacketSize):
+    assert len(buffer) >= 2
+    assert PacketType(buffer) == PacketTypes.NULLPACK
+    fhlen = self.fh.unpack(buffer, maximumPacketSize)
+    assert len(buffer) >= fhlen + self.fh.remainingLength
+    assert self.fh.DUP == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.QoS == 0, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    curlen = fhlen
+    curlen += self.reasonCode.unpack(buffer[curlen:])
+    curlen += self.properties.unpack(buffer[curlen:])[1]
+    assert curlen == fhlen + self.fh.remainingLength, \
+            "packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    return fhlen + self.fh.remainingLength
+
+  def __str__(self):
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "ReasonCode": str(self.reasonCode),
+      "Properties": self.properties.json(),
+    }
+    return data
+
+  def __eq__(self, packet):
+    return Packets.__eq__(self, packet) and \
+           self.reasonCode == packet.reasonCode and \
+           self.properties == packet.properties
 
 
+class Authacks(Packets):
+
+  def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
+          reasonCode="Success"):
+
+    object.__setattr__(self, "names",
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+    print("sangeeth 2 : ", PacketTypes.AUTHACK)
+    self.fh = FixedHeaders(PacketTypes.AUTHACK)
+    print("damn")
+    self.fh.DUP = DUP
+    self.fh.QoS = QoS
+    self.fh.RETAIN = RETAIN    
+   # variable header
+    self.reasonCode = ReasonCodes(PacketTypes.CONNACK, reasonCode)
+    self.properties = Properties(PacketTypes.CONNACK)
+    
+    if buffer != None:
+      self.unpack(buffer)
+
+  def pack(self):
+    print("sangeet 1")
+    buffer = self.reasonCode.pack()
+    buffer += self.properties.pack()
+    buffer = self.fh.pack(len(buffer)) + buffer
+    return buffer
+
+  def unpack(self, buffer, maximumPacketSize):
+    assert len(buffer) >= 2
+    assert PacketType(buffer) == PacketTypes.AUTHACK
+    fhlen = self.fh.unpack(buffer, maximumPacketSize)
+    assert len(buffer) >= fhlen + self.fh.remainingLength
+    assert self.fh.DUP == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.QoS == 0, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
+    curlen = fhlen
+    curlen += self.reasonCode.unpack(buffer[curlen:])
+    curlen += self.properties.unpack(buffer[curlen:])[1]
+    assert curlen == fhlen + self.fh.remainingLength, \
+            "AUTHACK packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    return fhlen + self.fh.remainingLength
+
+  def __(self):
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+
+  def json(self):
+    data = {
+      "fh": self.fh.json(),
+      "ReasonCode": str(self.reasonCode),
+      "Properties": self.properties.json(),
+    }
+    return data
+
+  def __eq__(self, packet):
+    return Packets.__eq__(self, packet) and \
+           self.reasonCode == packet.reasonCode and \
+           self.properties == packet.properties
+    
 classes = [Connects, Connacks, Publishes, Pubacks, Pubrecs,
            Pubrels, Pubcomps, Subscribes, Subacks, Unsubscribes,
-           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs, NTPReps]
+           Unsubacks, Pingreqs, Pingresps, Disconnects, Auths, NTPReqs, NTPReps, Nullpacks, Authacks]
 #==============sangeeth============================
 def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
   logger.info("[MQTT5-san-2.0] Inside unpackPacket in mqtt/formats/MQTTV5/MQTTV5.py")
