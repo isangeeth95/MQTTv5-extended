@@ -1504,11 +1504,13 @@ class Client(object):
                     print("1234566")
                     return message.info
 
-
-    def auth(self, username=None, password=None, payload=None):
+     def auth(self, credentials, payload=None, properties=None):
         print("one")
         
-        
+        credentials = credentials.encode('utf-8')
+        #payload = "nethmi"
+
+ 
         if isinstance(payload, unicode):
             local_payload = payload.encode('utf-8')
         elif isinstance(payload, (bytes, bytearray)):
@@ -1523,18 +1525,31 @@ class Client(object):
         
         if len(local_payload) > 268435455:
             raise ValueError('Payload too large.')
-
-
+        print("payload defauth: ", payload)
+        
+#        local_payload = payload.encode('utf-8')
+        #print("local_payload: ",local_payload)
 
         local_mid = self._mid_generate()
-
-        info = MQTTAuthMessageInfo(local_mid)
+#        class properties:
+            
+#            def __init__(self, username, password ):
+            
+#               self.username = username
+#               self.password = password
+       
+#        self._auth_properties = properties
+#        self._auth_properties.username = username
+        info = MQTTMessageInfo(local_mid)
 
         rc = self._send_auth(
-        local_mid, username, password, local_payload, info)
+                local_mid, credentials, local_payload, info, properties)
         info.rc = rc
         print("abc2")
-        print(info)
+        print("info: ",info)
+       # print("username defauth:  ", username)
+       # print("password def auth: ", password)
+        print("properties def auth: ", properties)
         return info
 
         with self._out_message_mutex:
@@ -1552,7 +1567,7 @@ class Client(object):
                 self._inflight_messages += 1
 
                 rc = self._send_auth(message.mid, message.username, message.password, message.payload,
-                    message.info)
+                    message.info, message.properties)
 
                 if rc is MQTT_ERR_NO_CONN:
                     self._inflight_messages -= 1
@@ -1565,10 +1580,6 @@ class Client(object):
                 message.state = mqtt_ms_queued
                 message.info.rc = MQTT_ERR_SUCCESS
                 return message.info
-
-
-         
-
 
     def username_pw_set(self, username, password=None):
         """Set a username and optionally a password for broker authentication.
