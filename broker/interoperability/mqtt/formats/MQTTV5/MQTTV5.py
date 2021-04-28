@@ -1957,7 +1957,7 @@ class NTPReps(Packets):
     return data
 
   def __eq__(self, packet):
-    return Packets.__eq__(self, packet) and 
+    return Packets.__eq__(self, packet) and \
            self.reasonCode == packet.reasonCode
     
 
