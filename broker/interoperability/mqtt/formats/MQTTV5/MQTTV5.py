@@ -2024,9 +2024,7 @@ class Authacks(Packets):
 
     object.__setattr__(self, "names",
         ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
-    print("sangeeth 2 : ", PacketTypes.AUTHACK)
     self.fh = FixedHeaders(PacketTypes.AUTHACK)
-    print("damn")
     self.fh.DUP = DUP
     self.fh.QoS = QoS
     self.fh.RETAIN = RETAIN    
@@ -2039,7 +2037,10 @@ class Authacks(Packets):
 
   def pack(self):
     print("sangeet 1")
-    buffer = self.reasonCode.pack()
+    flags = 0x00
+    logger.info("[MQTT5-3.2.2-1] bits 7-1 of the connack flags are reserved and must be set to 0")
+    buffer = bytes([flags])
+    buffer += self.reasonCode.pack()
     buffer += self.properties.pack()
     buffer = self.fh.pack(len(buffer)) + buffer
     return buffer
