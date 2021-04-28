@@ -3897,26 +3897,17 @@ class Client(object):
             remaining_data = byte[curlen:curlen+(remaining_datalen-1)].decode('utf-8')
             timercv = remaining_data
             rtncode=os.system('date -u -s @%s' %timercv)#command execution
-            rows = 4
-            for i in range(0, rows):
-                for j in range(0, i + 1):
-                    print("*", end=' ')
-                print(" ") 
+            print("********************\n*\n")
 
             if rtncode == 0:
-                print(" ")   
                 logger.info("[MQTT5-san-6.2] TIME SYNCED Client and Server: %s",os.popen('date -u --date=@%s'%timercv).read())
                 
             else:
-                print(" ")   
                 logger.info("[MQTT5-san-6.3] Check the above command execution return message")
                 logger.error("[MQTT5-san-6.4] TIME NOT SYNCED between Client and Server")
-                print(" ") 
-
-            for i in range(rows + 1, 0, -1):
-                for j in range(0, i - 1):
-                    print("*", end=' ')
                 print(" ")
+                
+            print("*\n********************")
                
         else:
             (flags, result) = struct.unpack("!BB", self._in_packet['packet'])
