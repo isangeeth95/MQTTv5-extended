@@ -3909,8 +3909,8 @@ class Client(object):
                 
             else:
                 print(" ")   
-                logger.info("[MQTT5-san-6.4] Check the above command execution return message")
-                logger.info("[MQTT5-san-6.3] TIME NOT SYNCED between Client and Server")
+                logger.info("[MQTT5-san-6.3] Check the above command execution return message")
+                logger.info("[MQTT5-san-6.4] TIME NOT SYNCED between Client and Server")
                 print(" ") 
 
             for i in range(rows + 1, 0, -1):
