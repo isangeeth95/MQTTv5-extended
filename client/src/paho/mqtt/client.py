@@ -3901,13 +3901,14 @@ class Client(object):
             for i in range(0, rows):
                 for j in range(0, i + 1):
                     print("*", end=' ')
-                print(" ")
-            print("")    
+                print(" ") 
 
             if rtncode == 0:
+                print("")   
                 logger.info("[MQTT5-san-6.2] TIME SYNCED Client and Server: %s",os.popen('date -u --date=@%s'%timercv).read())
                 
             else:
+                print("")   
                 logger.info("[MQTT5-san-6.2] TIME NOT SYNCED between Client and Server")
 
             for i in range(rows + 1, 0, -1):
