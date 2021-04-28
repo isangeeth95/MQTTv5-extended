@@ -808,10 +808,6 @@ class Connects(Packets):
       logger.info("[MQTT5-3.1.3-4] Clientid must be a UTF-8 encoded string")
       self.ClientIdentifier, valuelen = readUTF(buffer[curlen:], packlen - curlen)
       curlen += valuelen    
-      self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
-      self.timesys = os.popen('date +%s').read()
-      logger.info("[MQTT5-san-6.1] Received value length is %s and received data is %s",valuelen,self.timercv )
-      curlen += valuelen
 
       if self.WillFlag:
         curlen += self.WillProperties.unpack(buffer[curlen:])[1]
@@ -845,6 +841,11 @@ class Connects(Packets):
       if self.WillFlag and self.usernameFlag and self.passwordFlag:
         logger.info("[MQTT5-3.1.3-1] clientid, will topic, will message, username and password all present")
 
+      self.timercv, valuelen = readUTF(buffer[curlen:], packlen - curlen)
+      self.timesys = os.popen('date +%s').read()
+      logger.info("[MQTT5-san-6.1] Received value length is %s and received data is %s",valuelen,self.timercv )
+      curlen += valuelen
+      
       assert curlen == packlen, "Packet is wrong length curlen %d != packlen %d" % (curlen, packlen)
     except:
       traceback.print_exc()
@@ -863,9 +864,9 @@ class Connects(Packets):
       logger.info("[MQTT5-san-0.1] Client and server reside within the same time frame")
       return True
     else:
-      logger.info("[MQTT5-san-0.2] Client and server should reside within the same time frame")  
+      logger.info("[MQTT5-san-0.2] Client and server should reside within the same time frame")
       return False
-  
+
   def __str__(self):
     buf = str(self.fh)+", ProtocolName="+str(self.ProtocolName)+", ProtocolVersion=" +\
           str(self.ProtocolVersion)+", CleanStart="+str(self.CleanStart) +\
