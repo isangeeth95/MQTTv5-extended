@@ -1,7 +1,10 @@
+
 import paho.mqtt.client as mqtt
+from paho.mqtt import properties as Properties
+from paho.mqtt import packettypes as PacketTypes
 import time
 
-broker="192.168.56.111"
+broker="192.168.78.149"
 port =1883
 
 def on_log(client, userdata, level, buf):
@@ -22,7 +25,7 @@ def on_log(client, userdata, level, buf):
 #    print("In on_auth callback mid=", mid)
 
 #mid.Client.connected_flag=False
-client = mqtt.Client("python1")
+client = mqtt.Client("python2")
 client.on_log=on_log
 #client.on_connect = on_connect
 #client.on_disconnect = on_disconnect
@@ -33,13 +36,34 @@ client.connect(broker, port)
 #    print("in wait loop")
 #    time.sleep(1)
 #time.sleep(3)
-print("publishing")
+#print("publishing")
 #ret=client.publish("house/bulb1", "Test message 0", 0)
 #print("published return=",ret)
 #time.sleep(3)
-ret=client.auth("abcnethmi", "123", "payload1")
-print("authenticate return=",ret)
 
+#ret=client.auth("abcnethmi", "123")
+#print("authenticate return=",ret)
+
+
+#san=Properties.Properties(PacketTypes)
+publish_properties = Properties.Properties(PacketTypes.PacketTypes.PUBLISH)
+#print("sangeeth:  ",PacketTypes.PacketTypes.AUTH)
+print(publish_properties)
+publish_properties.UserProperty = ("a", "2")
+publish_properties.UserProperty = ("c", "3")
+#ret=client.auth("credentials", properties=publish_properties)
+ret=client.publish("house/bulb1", "Test message 0", properties=publish_properties)
+print("published return=",ret)
+
+
+auth_properties = Properties.Properties(PacketTypes.PacketTypes.AUTH)
+print("sangeeth:  ",PacketTypes.PacketTypes.AUTH)
+print(auth_properties)
+auth_properties.UserProperty = ("a", "2")
+auth_properties.UserProperty  = ("c", "3")
+ret=client.auth("authdata", "123", properties=auth_properties)
+print("properties_auth: ", auth_properties)
+print("authenticate return=",ret)
 
 
 
