@@ -3904,12 +3904,13 @@ class Client(object):
                 print(" ") 
 
             if rtncode == 0:
-                print("")   
+                print(" ")   
                 logger.info("[MQTT5-san-6.2] TIME SYNCED Client and Server: %s",os.popen('date -u --date=@%s'%timercv).read())
                 
             else:
-                print("")   
+                print(" ")   
                 logger.info("[MQTT5-san-6.2] TIME NOT SYNCED between Client and Server")
+                print(" ") 
 
             for i in range(rows + 1, 0, -1):
                 for j in range(0, i - 1):
