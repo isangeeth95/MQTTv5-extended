@@ -1642,11 +1642,12 @@ class Auths(Packets):
   def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
           reasonCode="Success"):
     object.__setattr__(self, "names",
-        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties", "ProtocolVersion"])
     self.fh = FixedHeaders(PacketTypes.AUTH)
     self.fh.DUP = DUP
     self.fh.QoS = QoS
     self.fh.RETAIN = RETAIN
+    self.ProtocolVersion = 5
     # variable header
     self.reasonCode = ReasonCodes(PacketTypes.CONNACK, reasonCode)
     #self.properties = Properties(PacketTypes.AUTH)
@@ -1669,13 +1670,14 @@ class Auths(Packets):
     assert self.fh.RETAIN == False, "[MQTT5-2.1.3-1] AUTH reserved bits must be 0"
     curlen = fhlen
     curlen += self.reasonCode.unpack(buffer[curlen:])
-    curlen += self.properties.unpack(buffer[curlen:])[1]
-    assert curlen == fhlen + self.fh.remainingLength, \
-            "AUTH packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    #curlen += self.properties.unpack(buffer[curlen:])[1]
+    #assert curlen == fhlen + self.fh.remainingLength, \
+    #        "AUTH packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
     return fhlen + self.fh.remainingLength
 
   def __str__(self):
-    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+    #return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)
 
   def json(self):
     data = {
