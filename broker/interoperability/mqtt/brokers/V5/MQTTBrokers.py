@@ -626,7 +626,28 @@ class MQTTBrokers:
     resp.packetIdentifier = packet.packetIdentifier
     resp.reasonCodes = reasonCodes
     respond(sock, resp)
+    
+  def auth(self, sock, packet):
+      print("inside authack function in MQTTBrokers.py----------")
+      resp = MQTTV5.Authacks()
+      print("authack function reponse------------------- MQTTBrokers.py", resp)
+      if packet.ProtocolVersion != 5:
+        logger.error("[MQTT5-3.1.2-2-error] Wrong protocol version %d", packet.ProtocolVersion)
+        resp.reasonCode.set("Unsupported protocol version")
+        respond(sock, resp)
+      logger.info("[MQTT5-3.1.2-2] Protocol version must be 5")
+      if self.options["maximumPacketSize"] < MQTTV5.MAX_PACKET_SIZE:
+        resp.properties.MaximumPacketSize = self.options["maximumPacketSize"]
+      if self.options["receiveMaximum"] < MQTTV5.MAX_PACKETID:
+        resp.properties.ReceiveMaximum = self.options["receiveMaximum"]
 
+    #  resp.packetIdentifier = packet.packetIdentifier
+
+      resp.reasonCode.set("Success")
+      print("Auth reasoncode MQTTBroker...........", resp)
+      respond(sock, resp)
+#    me.resend()
+  
   def publish(self, sock, packet):
     packet.receivedTime = time.monotonic()
     if packet.topicName.find("+") != -1 or packet.topicName.find("#") != -1:
