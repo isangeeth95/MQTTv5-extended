@@ -1646,8 +1646,8 @@ class Auths(Packets):
     self.fh.QoS = QoS
     self.fh.RETAIN = RETAIN
     # variable header
-    self.reasonCode = ReasonCodes(PacketTypes.AUTH, reasonCode)
-    self.properties = Properties(PacketTypes.AUTH)
+    self.reasonCode = ReasonCodes(PacketTypes.CONNACK, reasonCode)
+    #self.properties = Properties(PacketTypes.AUTH)
     if buffer != None:
       self.unpack(buffer)
 
