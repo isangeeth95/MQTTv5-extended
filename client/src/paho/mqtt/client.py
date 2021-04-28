@@ -1500,7 +1500,7 @@ class Client(object):
                     print("1234566")
                     return message.info
 
-     def auth(self, credentials, payload=None, properties=None):
+    def auth(self, credentials, payload=None, properties=None):
         print("one")
         
         credentials = credentials.encode('utf-8')
