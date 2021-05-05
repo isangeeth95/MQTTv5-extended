@@ -3905,6 +3905,7 @@ class Client(object):
             else:
                 logger.info("[MQTT5-san-6.3] Check the above command execution return message")
                 logger.error("[MQTT5-san-6.4] TIME NOT SYNCED between Client and Server")
+                print(" ")
                 
             print("#"*50)
                
