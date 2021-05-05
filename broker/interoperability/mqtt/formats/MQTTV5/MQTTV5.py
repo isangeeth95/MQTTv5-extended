@@ -863,9 +863,11 @@ class Connects(Packets):
     self.timesys = self.timesys[0:self.lentimesys-1]
     logger.info("[MQTT5-san-0] Compare epochs %s and %s",self.timercv,self.timesys)
     if (self.lentimercv == self.lentimesys) and (int(self.timesys) - int(self.timercv) <= 5):
+      print("#"*50)  
       logger.info("[MQTT5-san-0.1] Client and server reside within the same time frame")
       return True
     else:
+      print("#"*50)  
       logger.info("[MQTT5-san-0.2] Client and server should reside within the same time frame")
       return False
 
