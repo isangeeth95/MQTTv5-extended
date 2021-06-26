@@ -2025,8 +2025,10 @@ class Authacks(Packets):
           reasonCode="Success"):
 
     object.__setattr__(self, "names",
-        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+        ["fh", "sessionPresent", "DUP", "QoS", "RETAIN", "reasonCode", "properties"])
+    print("sangeeth 2 : ", PacketTypes.AUTHACK)
     self.fh = FixedHeaders(PacketTypes.AUTHACK)
+    self.sessionPresent = False
     self.fh.DUP = DUP
     self.fh.QoS = QoS
     self.fh.RETAIN = RETAIN    
@@ -2038,11 +2040,9 @@ class Authacks(Packets):
       self.unpack(buffer)
 
   def pack(self):
-    print("sangeet 1")
-    flags = 0x00
-    logger.info("[MQTT5-3.2.2-1] bits 7-1 of the connack flags are reserved and must be set to 0")
+    flags = 0x01 if self.sessionPresent else 0x00
     buffer = bytes([flags])
-    buffer += self.reasonCode.pack()
+    buffer = self.reasonCode.pack()
     buffer += self.properties.pack()
     buffer = self.fh.pack(len(buffer)) + buffer
     return buffer
@@ -2063,11 +2063,12 @@ class Authacks(Packets):
     return fhlen + self.fh.remainingLength
 
   def __(self):
-    return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
+    return str(self.fh)+", Session present="+str((self.sessionPresent & 0x01) == 1)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
 
   def json(self):
     data = {
       "fh": self.fh.json(),
+      "SessionPresent": (self.sessionPresent & 0x01) == 1,
       "ReasonCode": str(self.reasonCode),
       "Properties": self.properties.json(),
     }
