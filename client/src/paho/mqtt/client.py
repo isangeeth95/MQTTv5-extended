@@ -3108,8 +3108,6 @@ class Client(object):
         # hard-coded UTF-8 encoded string
         protocol = b"MQTT" if proto_ver >= MQTTv311 else b"MQIsdp"
 
-#        remaining_length = 2 + len(protocol) + 1 + \
-#            1 + 2 + 2 + len(self._client_id)
 
         remaining_length = 2 + len(protocol) + 1 + \
             1 + 2 + 2 + len(self._client_id) + 2 + len(date_time) #sangeeth
