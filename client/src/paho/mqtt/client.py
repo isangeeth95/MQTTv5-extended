@@ -132,6 +132,7 @@ CONNACK_REFUSED_IDENTIFIER_REJECTED = 2
 CONNACK_REFUSED_SERVER_UNAVAILABLE = 3
 CONNACK_REFUSED_BAD_USERNAME_PASSWORD = 4
 CONNACK_REFUSED_NOT_AUTHORIZED = 5
+CONNACK_REFUSED_TIME_NOT_EQUAL = 163
 
 # Connection state
 mqtt_cs_new = 0
@@ -240,6 +241,8 @@ def connack_string(connack_code):
         return "Connection Refused: bad user name or password."
     elif connack_code == CONNACK_REFUSED_NOT_AUTHORIZED:
         return "Connection Refused: not authorised."
+    elif connack_code == CONNACK_REFUSED_TIME_NOT_EQUAL:
+        return "Connection Refused: Client and Server not reside within the same time frame."
     else:
         return "Connection Refused: unknown reason."
 
