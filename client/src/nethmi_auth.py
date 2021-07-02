@@ -1,10 +1,9 @@
-
 import paho.mqtt.client as mqtt
 from paho.mqtt import properties as Properties
 from paho.mqtt import packettypes as PacketTypes
 import time
 
-broker="192.168.78.149"
+broker="192.168.78.156"
 port =1883
 
 def on_log(client, userdata, level, buf):
@@ -46,24 +45,31 @@ client.connect(broker, port)
 
 
 #san=Properties.Properties(PacketTypes)
-publish_properties = Properties.Properties(PacketTypes.PacketTypes.PUBLISH)
+#publish_properties = Properties.Properties(PacketTypes.PacketTypes.PUBLISH)
 #print("sangeeth:  ",PacketTypes.PacketTypes.AUTH)
-print(publish_properties)
-publish_properties.UserProperty = ("a", "2")
-publish_properties.UserProperty = ("c", "3")
+#print(publish_properties)
+#publish_properties.UserProperty = ("a", "2")
+#publish_properties.UserProperty = ("c", "3")
 #ret=client.auth("credentials", properties=publish_properties)
-ret=client.publish("house/bulb1", "Test message 0", properties=publish_properties)
-print("published return=",ret)
+#ret=client.publish("house/bulb1", "Test message 0", properties=publish_properties)
+#print("published return=",ret)
 
 
 auth_properties = Properties.Properties(PacketTypes.PacketTypes.AUTH)
 print("sangeeth:  ",PacketTypes.PacketTypes.AUTH)
 print(auth_properties)
-auth_properties.UserProperty = ("a", "2")
-auth_properties.UserProperty  = ("c", "3")
+auth_properties.UserProperty = ("username", "user")
+auth_properties.UserProperty  = ("password", "pass")
 ret=client.auth("authdata", "123", properties=auth_properties)
 print("properties_auth: ", auth_properties)
 print("authenticate return=",ret)
+
+
+
+
+
+
+
 
 
 
