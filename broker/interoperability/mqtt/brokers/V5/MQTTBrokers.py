@@ -644,6 +644,7 @@ class MQTTBrokers:
     #  resp.packetIdentifier = packet.packetIdentifier
 
       resp.reasonCode.set("Success")
+      resp.sessionPresent = True
       print("Auth reasoncode MQTTBroker...........", resp)
       respond(sock, resp)
 #    me.resend()

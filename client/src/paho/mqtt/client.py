@@ -132,6 +132,7 @@ CONNACK_REFUSED_IDENTIFIER_REJECTED = 2
 CONNACK_REFUSED_SERVER_UNAVAILABLE = 3
 CONNACK_REFUSED_BAD_USERNAME_PASSWORD = 4
 CONNACK_REFUSED_NOT_AUTHORIZED = 5
+CONNACK_REFUSED_TIME_NOT_EQUAL = 163
 
 # Connection state
 mqtt_cs_new = 0
@@ -240,6 +241,8 @@ def connack_string(connack_code):
         return "Connection Refused: bad user name or password."
     elif connack_code == CONNACK_REFUSED_NOT_AUTHORIZED:
         return "Connection Refused: not authorised."
+    elif connack_code == CONNACK_REFUSED_TIME_NOT_EQUAL:
+        return "Connection Refused: Client and Server not reside within the same time frame."
     else:
         return "Connection Refused: unknown reason."
 
@@ -447,7 +450,7 @@ class MQTTMessage(object):
     On Python 3, topic must be bytes.
     """
 
-    __slots__ = 'timestamp', 'state', 'dup', 'mid', '_topic', 'payload', 'qos', 'retain', 'info', 'properties'
+    __slots__ = 'timestamp', 'state', 'dup', 'mid', '_topic', '_credentials', 'payload', 'qos', 'retain', 'info', 'properties'
 
     def __init__(self, mid=0, topic=b""):
         self.timestamp = 0
@@ -455,6 +458,7 @@ class MQTTMessage(object):
         self.dup = False
         self.mid = mid
         self._topic = topic
+        self._credentials = credentials
         self.payload = b""
         self.qos = 0
         self.retain = False
@@ -473,6 +477,10 @@ class MQTTMessage(object):
     @property
     def topic(self):
         return self._topic.decode('utf-8')
+    
+    @property
+    def credentials(self):
+        return self._credentials.decode('utf-8')
 
     @topic.setter
     def topic(self, value):
@@ -481,14 +489,21 @@ class MQTTMessage(object):
 
 class AuthMQTTMessage(object):
 
-     __slots__ = 'mid', 'state', 'username', 'password', 'payload', 'info'
+     __slots__ = 'state', 'mid', '_credentials', 'payload', 'info', 'properties'
 
-     def __init__(self, mid=0, username=0 , password=0):
-         self.username = username
+     def __init__(self, mid=0, credentials=b""):
+         self.timestamp = 0
          self.state = mqtt_ms_invalid
-         self.password = password
+         self.mid = mid
+         self._credentials = credentials
          self.payload = b""
-         self.info = MQTTMessageInfo(mid)
+         self.info = MQTTAuthMessageInfo(mid)
+        
+     def __eq__(self, other):
+        """Override the default Equals behavior"""
+        if isinstance(other, self.__class__):
+            return self.mid == other.mid
+        return False
 
 
      def __ne__(self, other):
@@ -1505,10 +1520,12 @@ class Client(object):
                     return message.info
 
 
-    def auth(self, username=None, password=None, payload=None):
-        print("one")
+    def auth(self, credentials, payload=None, properties=None):
         
         
+        credentials = credentials.encode('utf-8')
+        
+ 
         if isinstance(payload, unicode):
             local_payload = payload.encode('utf-8')
         elif isinstance(payload, (bytes, bytearray)):
@@ -1523,18 +1540,18 @@ class Client(object):
         
         if len(local_payload) > 268435455:
             raise ValueError('Payload too large.')
-
-
+        print("payload defauth: ", payload)
+        
 
         local_mid = self._mid_generate()
 
-        info = MQTTAuthMessageInfo(local_mid)
+        info = MQTTMessageInfo(local_mid)
 
         rc = self._send_auth(
-        local_mid, username, password, local_payload, info)
+                local_mid, credentials, local_payload, info, properties)
         info.rc = rc
-        print("abc2")
-        print(info)
+        print("info: ",info)
+        print("properties def auth: ", properties)
         return info
 
         with self._out_message_mutex:
@@ -1552,7 +1569,7 @@ class Client(object):
                 self._inflight_messages += 1
 
                 rc = self._send_auth(message.mid, message.username, message.password, message.payload,
-                    message.info)
+                    message.info, message.properties)
 
                 if rc is MQTT_ERR_NO_CONN:
                     self._inflight_messages -= 1
@@ -1565,10 +1582,6 @@ class Client(object):
                 message.state = mqtt_ms_queued
                 message.info.rc = MQTT_ERR_SUCCESS
                 return message.info
-
-
-         
-
 
     def username_pw_set(self, username, password=None):
         """Set a username and optionally a password for broker authentication.
@@ -3108,8 +3121,6 @@ class Client(object):
         # hard-coded UTF-8 encoded string
         protocol = b"MQTT" if proto_ver >= MQTTv311 else b"MQIsdp"
 
-#        remaining_length = 2 + len(protocol) + 1 + \
-#            1 + 2 + 2 + len(self._client_id)
 
         remaining_length = 2 + len(protocol) + 1 + \
             1 + 2 + 2 + len(self._client_id) + 2 + len(date_time) #sangeeth
@@ -3228,8 +3239,8 @@ class Client(object):
             )
         return self._packet_queue(command, packet, 0, 0)
 
-    def _send_auth(self, mid, username, password, payload=b'', info=None, properties=None):
-        assert not isinstance(payload, unicode) and payload is not None
+    def _send_auth(self, mid, credentials, payload=b'', info=None, properties=None):
+#        assert not isinstance(payload, unicode) and payload is not None
 
 
         if self._sock is None:
@@ -3239,62 +3250,114 @@ class Client(object):
         command = AUTH
         packet = bytearray()
         packet.append(command)
-        payloadlen = len(payload)
+
+#        payloadlen = len(payload)
+#        remaining_length = 2 + payloadlen
+
+#        propertylen = 0
+#        remaining_length = 2 + propertylen
+#        payloadlen = len(payload)
 
         payloadlen = len(payload)
-        remaining_length = 2 + payloadlen
+        print("payloadlen: ",payloadlen)        
+        remaining_length = 2 + len(credentials) + payloadlen
+        print("remaining_length1: ",remaining_length)
+        print("credentials: ", credentials)
 
         if payloadlen == 0:
             if self._protocol == MQTTv5:
                 self._easy_log(
-                    MQTT_LOG_DEBUG,
-                    "Sending AUTH (m%d),'%s','%s', properties=%s (NULL payload)",
-                    mid, username, password, properties
-                )
+                        MQTT_LOG_DEBUG,
+                        "Sending AUTH (m%d), '%s', properties=%s (NULL payload)",
+                        mid, credentials, properties
+                        )
             else:
-               self._easy_log(
-                    MQTT_LOG_DEBUG,
-                    "Sending AUTH (m%d), '%s', '%s', (NULL payload)",
-                    mid, username, password
-                )
+                self._easy_log(
+                        MQTT_LOG_DEBUG,
+                        "Sending AUTH (m%d), '%s', (NULL payload)",
+                        mid, credentials
+                        )
 
         else:
             if self._protocol == MQTTv5:
                 self._easy_log(
-                    MQTT_LOG_DEBUG,
-                    "Sending AUTH (m%d), '%s', '%s', properties=%s, ... (%d bytes)",
-                    mid, username, password, properties, payloadlen
-                )
+                        MQTT_LOG_DEBUG,
+                        "Sending AUTH (m%d), '%s', properties=%s, ... (%d bytes)",
+                        mid, credentials, properties, payloadlen
+                        )
 
             else:
                 self._easy_log(
-                    MQTT_LOG_DEBUG,
-                    "Sending AUTH ((m%d),'%s','%s', ... (%d bytes))",
-                    mid, username, password, payloadlen
-                )
+                        MQTT_LOG_DEBUG,
+                        "Sending AUTH ((m%d),'%s','%s', ... (%d bytes))",
+                        mid, credentials, payloadlen
+                        )
 
-        
+
+#        self._properties=properties
+
         if self._protocol == MQTTv5:
+            print("mqtt5")
             if properties == None:
                 packed_properties = b'\x00'
             else:
                 packed_properties = properties.pack()
+                #packed_properties = self._properties.pack()
+                print("prop1")
             remaining_length += len(packed_properties)
+            print("remaining_length2: ",remaining_length)
+
+
+
 
         self._pack_remaining_length(packet, remaining_length)
-        self._pack_str16(packet, username)
+        self._pack_str16(packet, credentials)
+       # print("username:  ",username)
+
+
+#            if self._will:
+#                if self._will_properties == None:
+#                    print("prop2")
+#                    packed_will_properties = b'\x00'
+#                else:
+#                    packed_will_properties = self._will_properties.pack()
+#                    print("prop3")
+#                remaining_length += len(packed_will_properties)
+
+#        if self._protocol == MQTTv5:
+#            print("prop4")
+#            packet += packed_properties
+
+#            if self._will:
+#                if self._protocol == MQTTv5:
+#                    print("prop5")
+#                    packet += packed_will_properties
+            
+
+#        if username is not None:
+#            print("username:  ", username)
+#            self._pack_str16(packet, username)
+            
+#            if password is not None:
+#                print("password: ", password)
+#                self._pack_str16(packet, password)
+
+
+
+#            self._pack_remaining_length(packet, remaining_length)
+#        self._pack_str16(packet, username)
+#        self._pack_str16(packet, password)
+#            self._auth_pack_str16(packet, username, password)
+
 
         if self._protocol == MQTTv5:
             packet.extend(packed_properties)
-
+            print(properties)
 
         packet.extend(payload)
-        print("N2")
+        print("payload: ", payload)
 
-        return self._authpacket_queue(AUTH, packet, mid, username, password, info)
-
-
-
+        return self._authpacket_queue(AUTH, packet, mid, info)
 
 #Sangeeth start - NTP supported ========================================================================
 
@@ -3770,12 +3833,10 @@ class Client(object):
         return MQTT_ERR_SUCCESS
 
 
-    def _authpacket_queue(self, command, packet, mid, username, password, info=None):
+    def _authpacket_queue(self, command, packet, mid, info=None):
         mpkt = {
             'command': command,
             'mid': mid,
-            'username': username,
-            'password': password,
             'pos': 0,
             'to_process': len(packet),
             'packet': packet,
@@ -3784,12 +3845,18 @@ class Client(object):
 
         with self._out_packet_mutex:
             print("Qq2")
+            print("len(packet): ", len(packet))
+            print("_out_packet_mutext: ",self._out_packet_mutex)
+            print("mpkt: ",mpkt)
             self._out_packet.append(mpkt)
             if self._current_out_packet_mutex.acquire(False):
                 print("Qq3")
                 if self._current_out_packet is None and len(self._out_packet) > 0:
                     print("Qq4")
+                    #print("len(self._out_packet): ", len(self._out_packet))
+                    #print("_current_out_packet_before: ", self._current_out_packet)
                     self._current_out_packet = self._out_packet.popleft()
+                    #print("_current_out_packet_after: ", self._current_out_packet)
                 self._current_out_packet_mutex.release()
 
         try:
@@ -3809,9 +3876,6 @@ class Client(object):
 
         self._call_socket_register_write()
         return MQTT_ERR_SUCCESS
-
-
-
 
     def _packet_handle(self):
         logger.info("[MQTT5-san-5.0] Packet inside _packet_handle(): %s",self._in_packet)        
