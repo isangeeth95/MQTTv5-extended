@@ -26,7 +26,49 @@ so that the tests that use this package can send invalid data for error testing.
 
 import logging, struct
 import os
+#import sys
+# =============Start Tharidu==================
+import random
+#import time
+import hashlib
+import ldap3
+from ldap3.core.exceptions import LDAPException
 
+# Buffer Value get userName and pwd
+def bufferReg(bufferValue):
+    string =bufferValue.decode('utf-8', 'ignore')
+    source= ''.join(e for e in string if e.isalnum())
+    result=[]
+    tmpUser=source.split('authdatausername')
+    tmpPwd=source.split('password', 1)
+    for par in tmpUser:
+        if 'password' in par:
+            result.append(par.split('password')[0])
+    return result[0],tmpPwd[1]
+
+# Check hashed password validity
+def verify_password(stored_password, provided_password):
+    """Verify a stored password against one provided by user"""
+    salt = os.urandom(32)
+    pwdhash = hashlib.pbkdf2_hmac('sha512',
+                                  provided_password.encode('utf-8'),
+                                  salt,
+                                  100000)
+#     print(pwdhash,provided_password,stored_password)
+    return pwdhash == stored_password
+        
+# ldap_login Auth
+def ldap_auth(ldap_server, username, password):
+    try:
+#         with ldap3.Connection(ldap_server, user=username, password=hash_password(password)) as conn:
+        with ldap3.Connection(ldap_server, user=username, password=password, auto_bind = True) as conn:
+            print(conn.result["description"]) # "success" if bind is ok
+            return True
+    except LDAPException:
+        print('Unable to connect to LDAP server')
+        return False
+    
+# =============End Tharidu==================
 logger = logging.getLogger('MQTT broker')
 
 # Low-level protocol interface
@@ -45,6 +87,7 @@ class AcksProtocolError(ProtocolError):
 
 MAX_PACKET_SIZE = 2**28-1
 MAX_PACKETID = 2**16-1
+#ldap_status = False
 
 class PacketTypes:
 
@@ -1644,7 +1687,7 @@ class Auths(Packets):
   def __init__(self, buffer=None, DUP=False, QoS=0, RETAIN=False,
           reasonCode="Success"):
     object.__setattr__(self, "names",
-        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties", "ProtocolVersion"])
+        ["fh", "DUP", "QoS", "RETAIN", "reasonCode", "properties", "ProtocolVersion", "ldap_status"])
     self.fh = FixedHeaders(PacketTypes.AUTH)
     self.fh.DUP = DUP
     self.fh.QoS = QoS
@@ -1675,7 +1718,37 @@ class Auths(Packets):
     #curlen += self.properties.unpack(buffer[curlen:])[1]
     #assert curlen == fhlen + self.fh.remainingLength, \
     #        "AUTH packet is wrong length %d %d" % (self.fh.remainingLength, curlen)
+    # =============Start Tharidu==================
+    
+    print("AUTH BUFFER {}".format(buffer))
+    buffers = buffer
+    ldap_server = "ldap.forumsys.com"
+    bufferUsername, bufferPassword = bufferReg(buffers)
+    #username = "cn=read-only-admin,dc=example,dc=com"
+    username = "cn=read-only-{},dc=example,dc=com".format(bufferUsername)
+    print("pwd {}".format(bufferPassword))
+    #password = bufferPassword
+    password = "password"
+    self.ldap_status = ldap_auth(ldap_server, username, password)
+    print("ldap {}".format(self.ldap_status))
+    if(self.ldap_status):
+        print("LDAP server - Authenticated successfully.")
+    else:
+        print("LDAP server - User name and password do not match")
+    
+    # =============End Tharidu==================
+
     return fhlen + self.fh.remainingLength
+
+  def _authResult(self):       #Nethmi
+  
+    if (self.ldap_status == True):
+      logger.info("[MQTT5-Neth] Successfully Authenticated")
+      return True
+    else:
+      logger.info("[MQTT5-Neth] Authentication failed.......")
+      return False
+
 
   def __str__(self):
     #return str(self.fh)+", ReasonCode: "+str(self.reasonCode)+", Properties: "+str(self.properties)
@@ -2094,3 +2167,5 @@ def unpackPacket(buffer, maximumPacketSize=MAX_PACKET_SIZE):
     packet = None
   return packet
 #==================sangeeth==========================
+
+

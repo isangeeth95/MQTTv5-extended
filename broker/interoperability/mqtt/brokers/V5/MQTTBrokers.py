@@ -646,7 +646,20 @@ class MQTTBrokers:
       resp.reasonCode.set("Success")
       resp.sessionPresent = True
       print("Auth reasoncode MQTTBroker...........", resp)
-      respond(sock, resp)
+
+      if(MQTTV5.Auths._authResult(packet)): #Nethmi   
+        #self.disconnectAll()
+        #resp.reasonCode.set("Success")
+        logger.info("[MQTT5-Neth] COMMUNICATION ACCPTED. Communication Continues...")
+        #self.disconnectAll()
+        #return    
+      else: 
+        #resp.reasonCode.set("Client and server not reside within the same time frame")
+        logger.error("[MQTT5-Neth] Authentication failed")
+        logger.info("[MQTT5-Neth] Communication Stops due to closing the sock ")
+        sock.close()
+      #self.disconnectAll()
+      respond(sock, resp)     
 #    me.resend()
   
   def publish(self, sock, packet):
